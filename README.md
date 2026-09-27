@@ -1,4 +1,4 @@
-# pi skills
+# skills
 
 本仓库收录 pi agent 使用的 skill。读者是使用 pi 的人与模型。要解决的问题是快速判断"当前任务该加载哪个 skill"。读完能按 skill 索引定位目录、触发场景与入口文件。全文分：skill 索引、各 skill 说明、使用方式、目录约定。
 
