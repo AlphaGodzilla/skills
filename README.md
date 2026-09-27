@@ -8,6 +8,8 @@
 | --- | --- | --- | --- |
 | `firecrawl` | 在会话中获取网页数据：搜索、抓取、交互、文档解析、页面监控与科研索引 | 需要实时网页数据、抓取指定 URL、解析本地 PDF/DOCX、监控页面变化 | [`firecrawl/`](firecrawl/SKILL.md) |
 | `ontology-modeling` | 把业务需求转成 OMF v6 本体驱动建模框架的模型文件 M1~M6（可选 M7/MU/MM/MI） | 用户要求"按本体建模""生成 M1~M6""输出九大模型""做需求建模"，或给出一段业务需求要求产出这些模型 | [`ontology-modeling/`](ontology-modeling/SKILL.md) |
+| `doc-writing-conventions` | 撰写或修改 skill、AGENTS.md/CLAUDE.md、ADR 三类文档时的中文行文规范 | 新建或编辑 skill、写项目代理指令文件、记录架构决策 | [`doc-writing-conventions/`](doc-writing-conventions/SKILL.md) |
+| `adr-writing` | 创建、更新与维护架构决策记录（ADR），模板基于 MADR 4.0.0 中文版 | 用户说"写 ADR""沉淀决策""更新/取代 ADR"，或刚拍板技术选型、持久化方案、部署形态、模块边界等决策 | [`adr-writing/`](adr-writing/SKILL.md) |
 
 ## firecrawl
 
@@ -43,6 +45,31 @@
 | `scripts/omf_validate.py` | 结构与跨模型引用校验器（PEP 723，uv 隔离运行） |
 
 硬性约定：业务建模阶段禁止输出任何代码；模型变更必须同步全部引用文件并跑校验，错误清零前禁止提交。
+
+## doc-writing-conventions
+
+规定 skill、AGENTS.md/CLAUDE.md、ADR 三类文档的中文行文规范。要解决的问题是：文档写了，读者只读一遍仍不知道该不该照做、每步做什么。
+
+两条总原则：
+
+1. **结构约束**决定信息出现的顺序：开篇给图景，再给骨架，最后给细节。
+2. **语言约束**决定单句能否被唯一理解：中文优先、删冗余、消除分词歧义。
+
+核心内容：开篇四问、由浅入深的骨架、删句判据、中文分词歧义六类改写表、三类文档的结构差异与自检清单。可直接套用的骨架见 `references/templates.md`。
+
+## adr-writing
+
+记录架构决策，回答"为什么这么选、放弃了什么"。ADR 落在 `docs/adr/`，模板与状态流转基于 MADR 4.0.0 中文版，全文见其 `references/madr-4.0.0-zh.md`。
+
+硬性约定：
+
+- 一条 ADR 只记录一个决策；编号禁止复用。
+- 只增不改：`accepted` 的 Decision、Context、Options 正文永不改写，仅允许改 `status` 与 `date`。
+- 备选必须包含真实被否决项及否决理由；Consequences 必须同时给出 Good 与 Bad。
+- 不编造：记不清的内容标注 `UNCONFIRMED:`。
+- 编号、标题、状态只维护在 `docs/adr/README.md`，其它文档只放链接。
+
+行文遵循 `doc-writing-conventions`；一个决策一次提交，ADR 与实现代码同行。
 
 ## 使用方式
 
