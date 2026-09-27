@@ -1,6 +1,14 @@
 # skills
 
-本仓库收录 pi agent 使用的 skill。读者是使用 pi 的人与模型。要解决的问题是快速判断"当前任务该加载哪个 skill"。读完能按 skill 索引定位目录、触发场景与入口文件。全文分：skill 索引、各 skill 说明、使用方式、目录约定。
+本仓库收录 agentless 的通用 skill。读者是使用这些 skill 的人与模型。要解决的问题是快速判断"当前任务该加载哪个 skill"。读完能按 skill 索引定位目录、触发场景与入口文件。全文分：定位、skill 索引、各 skill 说明、使用方式、目录约定。
+
+## 定位
+
+这些是 **agentless 的通用 skill**：与具体 agent 实现无关，不绑定任何运行时、模型厂商或平台。
+
+依赖面只有一条约定：一个目录 + 入口 `SKILL.md` + frontmatter（`name`、`description`）。任一支持该约定的 agent 均可按 `description` 判断是否加载；人类也可以直接阅读 `SKILL.md` 按流程执行。
+
+skill 之间除显式声明外互不依赖，可单独复制到任意仓库使用。
 
 ## skill 索引
 
@@ -73,7 +81,7 @@
 
 ## 使用方式
 
-pi 依据每个 `SKILL.md` 的 frontmatter `description` 判断是否加载，`name` 必须与目录名一致。
+任一支持 skill 约定的 agent（含 pi）依据 `SKILL.md` 的 frontmatter `description` 判断是否加载；`name` 必须与目录名一致。
 
 校验模型文件（在目标项目中，脚本 vendoring 到 `tools/`）：
 
