@@ -1,0 +1,5 @@
+spring:
+  mongodb:
+    # Boot 4 起连接属性前缀是 spring.mongodb（spring.data.mongodb.uri 自 4.0 起废弃）。
+    # 凭据只经环境变量注入，禁止把密码写进本文件。
+    uri: "${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/{{db_name}}}"

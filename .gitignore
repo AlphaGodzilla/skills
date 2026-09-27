@@ -1,0 +1,11 @@
+# 模板目录里的项目骨架会被本地构建 / IDE 就地编译（例如在 base/ 下跑 gradle 或 IDE 自动导入），
+# 这些产物不属于模板，绝不提交。
+**/templates/**/bin/
+**/templates/**/build/
+**/templates/**/out/
+**/templates/**/.gradle/
+.idea/
+.DS_Store
+__pycache__/
+# 本机工具索引：在哪个仓库跑 codegraph init，就在哪个仓库生成本机索引，不入库。
+.codegraph/

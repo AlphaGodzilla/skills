@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    # 凭据只经环境变量注入，禁止把密码写进本文件；默认值只用于本机开发
+    url: "${SPRING_DATASOURCE_URL:{{jdbc_url}}}"
+    username: "${SPRING_DATASOURCE_USERNAME:{{db_user}}}"
+    password: "${SPRING_DATASOURCE_PASSWORD:{{db_password}}}"
+    driver-class-name: {{jdbc_driver}}
+  jpa:
+    # 延迟到事务开始时才获取连接，避免把 ORM 会话绑到整个请求
+    open-in-view: false
+    hibernate:
+      # 表结构由 Flyway 迁移脚本拥有；启动时核对实体与库结构是否一致，不一致直接启动失败
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    locations: classpath:db/migration

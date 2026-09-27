@@ -1,0 +1,38 @@
+# ── 环境变量与凭据（绝不提交）────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── 构建产物 ─────────────────────────────────────────────
+build/
+.gradle/
+out/
+bin/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# ── 日志与临时文件 ───────────────────────────────────────
+*.log
+logs/
+tmp/
+
+# ── 本机工具索引（每台机器各建一份，不入库）────────────────
+# CodeGraph 索引：生成器装了 codegraph CLI 时会执行 codegraph init 建立。
+# 工具自身也带 .codegraph/.gitignore，这里整目录忽略，连它也不进版本库。
+.codegraph/
+
+# ── IDE / 编辑器 ─────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.swp
+*.ipr
+
+# ── 操作系统 ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+tmp/
+.worktree/
+.pi-subagents
+.pi/subagents

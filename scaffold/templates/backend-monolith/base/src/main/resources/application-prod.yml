@@ -1,0 +1,7 @@
+# 生产 profile：关闭 API 文档站。启用方式：SPRING_PROFILES_ACTIVE=prod
+#
+# ⚠️ knife4j 的 production 屏蔽是「HTTP 200 + 拒绝页」而不是 403（upstream 行为），
+# 监控不得按状态码判断该路径是否可用。
+# 另注：upstream 的拒绝页 Content-Type 是 `text/palin;charset=UTF-8`（拼写有误），同样不能作为可用性判据。
+knife4j:
+  production: true

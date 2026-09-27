@@ -1,0 +1,38 @@
+# 公共配置：与「选了哪个数据库 / 缓存」无关的部分。
+# 数据库连接与缓存策略由 spring.config.import 引入的两个文件提供（生成时按 --db / --cache 放入对应能力组件）。
+spring:
+  application:
+    name: {{project_name}}
+  config:
+    # 两个文件都必须存在：生成器已按 --db / --cache 放入对应组件
+    import: "classpath:application-db.yml,classpath:application-cache.yml"
+  mvc:
+    # 统一错误体为 RFC 7807 Problem Details：框架级错误与领域异常映射共用同一响应形状
+    problemdetails:
+      enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      # 不部署到 Kubernetes，关闭 liveness/readiness 探针组，响应稳定为 {"status":"UP"}
+      probes:
+        enabled: false
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: default
+      display-name: 全部接口
+      paths-to-match: /api/**
+
+knife4j:
+  # 开发环境开启文档站（/doc.html）；prod profile 关闭（见 application-prod.yml）
+  enable: true

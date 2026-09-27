@@ -1,0 +1,7 @@
+spring:
+  cache:
+    type: redis
+    redis:
+      # 分布式缓存。默认 JDK 序列化：被缓存的返回值必须实现 java.io.Serializable
+      time-to-live: 10m
+      cache-null-values: false

@@ -1,0 +1,40 @@
+# 测试 profile（Spring 测试用 @ActiveProfiles("test") 激活）。
+# 目标：./gradlew test 不依赖任何外部数据库与缓存，CI 与本地一致。
+#?if db == "postgres" or db == "mysql"
+spring:
+  cache:
+    # 用进程内简单缓存替掉 caffeine / redis
+    type: simple
+  datasource:
+    # H2 内存库承担测试用库，无需任何外部服务
+    url: "jdbc:h2:mem:{{db_name}};DB_CLOSE_DELAY=-1"
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      # 测试用库由 Hibernate 建表；真实库的结构由 Flyway 迁移脚本拥有
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+#?endif
+#?if db == "mongodb"
+spring:
+  cache:
+    type: simple
+#?endif
+#?if db == "mongodb" or cache == "redis"
+management:
+  health:
+    #?if db == "mongodb"
+    # 测试不连 MongoDB：健康组件报 DOWN 会让 /actuator/health 断言失败
+    mongodb:
+      enabled: false
+    #?endif
+    #?if cache == "redis"
+    # 测试不连 Redis
+    redis:
+      enabled: false
+    #?endif
+#?endif

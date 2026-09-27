@@ -1,0 +1,51 @@
+[versions]
+# Java toolchain 基线
+java = "21"
+# Spring Boot 基线（4.1.x 线）
+springBoot = "4.1.1"
+# 架构守护测试 ArchUnit：不在 Boot BOM 管理范围内，需要显式版本
+archunit = "1.5.0"
+# API 文档站（springdoc 3.1.x 与 Boot 4.1 对齐）
+springdoc = "3.1.1"
+# 代码格式化：Spotless（palantir-java-format：4 空格缩进、120 列）
+spotless = "8.10.3"
+# API 文档站 UI：knife4j upstream 停更于 4.4.0（Boot 3.x 线 starter），与 Boot 4.1 组合时必须
+# 排除它传递的 springdoc 2.x，改用上面的 springdoc 3.1.x 线
+knife4j = "4.4.0"
+
+[libraries]
+# Boot 4 的 Gradle 插件不向项目注入依赖管理，versionless 条目全靠这个 BOM 解析版本
+spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
+
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-starter-cache" }
+spring-boot-starter-data-mongodb = { module = "org.springframework.boot:spring-boot-starter-data-mongodb" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+
+# 架构守护：@AnalyzeClasses / @ArchTest 的 JUnit 5 集成
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+
+# API 文档站：springdoc 生成 OAS，UI 走它的 webmvc-ui
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+knife4j-openapi3-jakarta-spring-boot-starter = { module = "com.github.xiaoymin:knife4j-openapi3-jakarta-spring-boot-starter", version.ref = "knife4j" }
+
+# 缓存实现（二选一）：caffeine 为进程内，redis 走 Boot 的 RedisCacheManager
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
+
+# 关系型数据库（postgres / mysql 二选一）：schema 由 Flyway 迁移脚本拥有。
+# Boot 4 把 Flyway 的自动配置拆进 spring-boot-flyway，因此依赖 starter 而不是裸 flyway-core
+spring-boot-starter-flyway = { module = "org.springframework.boot:spring-boot-starter-flyway" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql" }
+flyway-mysql = { module = "org.flywaydb:flyway-mysql" }
+postgresql = { module = "org.postgresql:postgresql" }
+mysql-connector-j = { module = "com.mysql:mysql-connector-j" }
+
+# 测试用内存库（仅 JPA 底座使用）
+h2 = { module = "com.h2database:h2" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
