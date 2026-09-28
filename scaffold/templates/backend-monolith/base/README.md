@@ -2,7 +2,7 @@
 
 后端单体应用：Spring Boot 4 + Java 21，六边形分层，按限界上下文组织包。
 
-在本仓库工作的 agent 先读 [`AGENTS.md`](AGENTS.md)：常用命令、目录职责与硬约束都在那里。
+在本仓库工作的 agent 先读 [`AGENTS.md`](AGENTS.md)：那里是硬约束与「文档地图」，细节章节按任务读 `docs/scaffold/` 下对应的一篇。
 
 生成时的技术选型：
 
@@ -19,7 +19,8 @@
 
 ```bash
 ./gradlew test        # 单元与契约测试：不需要任何外部依赖
-./gradlew build       # 完整验收：上面的测试 + ArchUnit 架构守护 + 格式检查
+./gradlew build       # 完整验收：上面的测试 + ArchUnit 架构守护 + 格式检查 + 覆盖率与 CRAP 门禁
+scripts/qa-gate.sh    # 提交前验收：等价于 build，失败时打印失败原因、证据与下一步
 ./gradlew bootRun     # 启动服务（或 scripts/dev-run.sh，带彩色日志与环境变量）
 ```
 
@@ -42,6 +43,29 @@ scripts/dev-it.sh --tests 'com.acme.app.sample.SampleIntegrationIT'  # 跑一个
 默认的 `test` 任务**排除**集成测试，所以 `./gradlew build` 永远不依赖外部依赖；只有 `dev-it.sh`
 会带上 `-PincludeIntegration` 并保证容器在结束时被删除（成功、失败、Ctrl-C 都算）。
 
+## 质量门禁（覆盖率与 CRAP）
+
+提交前跑 `scripts/qa-gate.sh`：它跑的就是下面这些门禁，失败时会指出哪一道门禁失败、证据在哪、下一步跑什么。
+
+`./gradlew build` 强制两项门禁，任一不达标即构建失败：
+
+| 门禁 | 任务 | 阈值（`gradle.properties`，`-P` 可临时覆盖） |
+| --- | --- | --- |
+| 覆盖率下限 | `jacocoTestCoverageVerification` | `coverageLineMin=0.65`、`coverageBranchMin=0.65` |
+| 单方法 CRAP 上限 | `crapCheck` | `crapMax=30` |
+
+CRAP 罚的是「圈复杂度高又缺测试」，而不是覆盖率本身：`CRAP(m) = comp(m)^2 × (1 - cov(m))^3 + comp(m)`。
+
+| 报告 | 路径 |
+| --- | --- |
+| 覆盖率（人读） | `build/reports/jacoco/test/html/index.html` |
+| 覆盖率（机器读） | `build/reports/jacoco/test/jacocoTestReport.xml` |
+| CRAP 逐方法明细 | `build/reports/crap/crap.txt` |
+
+只看分数用 `./gradlew crapReport`；临时放宽用 `./gradlew build -PcrapMax=50`。
+
+默认运行排除集成测试，只由集成测试覆盖的代码（仓储适配等）覆盖率为 0。要合并两层：`scripts/dev-it.sh build`（`mongodb` + `redis` 组合实测行覆盖 70.6% → 92.2%）。
+
 ## 目录结构
 
 ```
@@ -58,7 +82,7 @@ src/main/java/{{package_path}}/
 ```
 
 仓库根还有 `scripts/`（开发辅助脚本，见下）、`.env.example`（可选的本机覆盖项，如端口冲突时的
-`DB_HOST_PORT`）、`AGENTS.md` / `CLAUDE.md`（给 agent 的入口指令）。若本机装了 `codegraph` CLI，
+`DB_HOST_PORT`）、`AGENTS.md` / `CLAUDE.md`（给 agent 的入口指令，细节章节在 `docs/scaffold/` 下按需读）。若本机装了 `codegraph` CLI，
 生成器已执行 `codegraph init --yes` 建立 `.codegraph/` 代码索引（已在 `.gitignore` 中忽略，不入库）。
 
 ## 分层与边界约束
@@ -80,7 +104,7 @@ src/main/java/{{package_path}}/
 格式化只作用于**相对 HEAD 有改动的文件**（含新增未跟踪文件）：已提交的文件不再进入检查范围，因此不会对既有代码做无差别重排，只有提交后的下一次改动会被检查。
 
 - Java：palantir-java-format（4 空格缩进、120 列），import 固定分组 `java → javax/jakarta → org → 其它第三方 → 本项目`，删除未使用的 import。
-- 其它文本（`*.md` / `*.yml` / `*.sql` / `*.toml` / `*.kts` / `*.sh` / `.env.example` / `.gitignore` / `.editorconfig`）：去行尾空白、末尾补换行。
+- 其它文本（`*.md` 与 `docs/**/*.md` / `*.yml` / `*.sql` / `*.toml` / `*.kts` / `*.sh` / `.env.example` / `.gitignore` / `.editorconfig`）：去行尾空白、末尾补换行。
 
 ⚠️ 项目还没 `git init` 或还没有首次提交时，Spotless 解析不到 HEAD，此时自动退化为全量检查（不会构建失败）；有了提交之后就只检查改动过的文件。
 
@@ -91,6 +115,7 @@ src/main/java/{{package_path}}/
 | 脚本 | 什么时候用 | 怎么用 |
 | --- | --- | --- |
 | `dev-test.sh` | 跑单元与契约测试（日常最常用） | `scripts/dev-test.sh`、`scripts/dev-test.sh --tests 'com.acme.app.shared.id.UlidTest'` |
+| `qa-gate.sh` | **提交前必过**：完整验收（测试 + 架构 + 格式 + 覆盖率与 CRAP） | `scripts/qa-gate.sh`；失败时给出定位引导，完整日志在 `build/qa-gate.log` |
 | `dev-it.sh` | 跑集成测试（需要真实数据库） | `scripts/dev-it.sh`；跑完自动删容器；`--keep` 保留容器调试；`clean` 清理遗留容器 |
 | `dev-run.sh` | 本地起服务联调 | `scripts/dev-run.sh`；应用参数放 `--` 之后：`scripts/dev-run.sh -- --server.port=9090`；`APP_LOG_LEVEL=DEBUG` / `SQL_LOG_LEVEL=DEBUG` 调日志 |
 | `create-tag.sh` | 发布前打版本 tag（交互式） | `scripts/create-tag.sh`；类型默认取当前分支名 |
@@ -148,6 +173,6 @@ Spring 的 `RedisCacheManager` 默认用 JDK 序列化缓存值，**被缓存的
 
 ## 下一步
 
-1. 删除 `sample` 包与它的测试，按同样形状新增真实限界上下文：在 `IdPrefix` 登记两位前缀，在 `ArchitectureTest.CONTEXTS` 登记上下文名，并补 `AGENTS.md` 的「目录职责」一行。
+1. 删除 `sample` 包与它的测试，按同样形状新增真实限界上下文：在 `IdPrefix` 登记两位前缀，在 `ArchitectureTest.CONTEXTS` 登记上下文名，并补 `docs/scaffold/structure.md` 的「目录职责」一行。
 2. 用 `adr-writing` 把底座选型（框架版本、数据能力、缓存能力、分层约定）记成 ADR，后续每个技术决策单独记一条。
 3. 需要跨上下文调用时，先定义对方的应用层端口，再登记进 `ArchitectureTest.PUBLISHED_CROSS_CONTEXT_PORTS`。

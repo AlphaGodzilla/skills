@@ -36,3 +36,9 @@ springdoc:
 knife4j:
   # 开发环境开启文档站（/doc.html）；prod profile 关闭（见 application-prod.yml）
   enable: true
+  # basic:
+  #   enable: false
+  #   username: admin
+  #   password: admin
+  # setting:
+  #   language: zh_cn

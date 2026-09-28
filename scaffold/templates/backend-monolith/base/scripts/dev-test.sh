@@ -9,6 +9,7 @@
 # 这些测试**不需要**任何外部依赖：测试 profile 用 H2 与测试替身，所以这里不碰 podman、不碰容器。
 # 需要真实数据库的集成测试（@Tag("integration")）默认被 test 任务排除，用 scripts/dev-it.sh 跑：
 # 它会用 podman 起容器、跑 IT、并在结束时删除容器。
+# 覆盖率与 CRAP 门禁不在这里跑，它们随 ./gradlew build 执行（只看 CRAP 分数用 ./gradlew crapReport）。
 #
 # 与 dev-run.sh 共用同一份 .env（可选）。
 

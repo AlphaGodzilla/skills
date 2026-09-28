@@ -23,10 +23,10 @@
 | `src/test/java/<pkg>/ApplicationSmokeTest.java` | 冒烟：上下文能起、`/actuator/health` 为 `{"status":"UP"}` |
 | `src/test/java/<pkg>/sample/**` | 分层测试样例：领域单测、用例单测（测试替身）、REST 契约测试，以及集成测试 `SampleIntegrationIT`（`@Tag("integration")`，跑真实数据库） |
 | `.env.example` | 可选的本机覆盖项（端口冲突时的 `DB_HOST_PORT`、真实库凭据）；复制为 `.env`（已 gitignore） |
-| `scripts/` | 开发辅助脚本：`dev-test.sh`（单元/契约测试）、`dev-it.sh`（集成测试：podman 起容器并在结束时删除）、`dev-run.sh`（本地起服务）、`create-tag.sh`（打 tag）、`podman-testcontainers.sh`（仅改用 Testcontainers 时需要）、`lib/*.sh`（供 source 的库）。用法见第五节 |
+| `scripts/` | 开发辅助脚本：`qa-gate.sh`（提交前验收：跑门禁并在失败时给定位引导）、`dev-test.sh`（单元/契约测试）、`dev-it.sh`（集成测试：podman 起容器并在结束时删除）、`dev-run.sh`（本地起服务）、`create-tag.sh`（打 tag）、`podman-testcontainers.sh`（仅改用 Testcontainers 时需要）、`lib/*.sh`（供 source 的库）。用法见第五节 |
 | `.codegraph/` | 本机 CodeGraph 索引（生成器在装了 CLI 时用 `codegraph init --yes` 建立，约 0.5s）。生成物已在项目 `.gitignore` 里忽略整个 `.codegraph/`，不入库；`codegraph status` 看统计，`codegraph index` 重建，`codegraph sync` 增量更新 |
 | `.gitignore`、`.editorconfig`、`README.md` | 仓库约定与项目说明 |
-| `AGENTS.md`、`CLAUDE.md` | 给在本仓库工作的 agent 的入口指令：技术栈、常用命令（含怎么跑测试）、目录职责、硬约束、数据与缓存约定。后者只有一句指向前者，避免两份指令漂移 |
+| `AGENTS.md`、`CLAUDE.md`、`docs/scaffold/*.md` | 给在本仓库工作的 agent 的指令，分入口与按需章节两层：`AGENTS.md` 只放仓库概述、硬约束与「文档地图」；细节放 `docs/scaffold/`（`development.md` 命令与测试分层、`structure.md` 目录职责与分层边界、`data-cache.md` 数据与缓存约定），由入口按任务分发，agent 只读相关的一篇。`CLAUDE.md` 只有一句指向 `AGENTS.md`。`README.md` 面向人，是 agent 指令里的**最后一档**：只在需要项目背景、技术选型理由、配置项或脚本参数的逐条说明时，才由地图路由过去读 |
 
 `sample` 上下文的分层（六边形）：
 
@@ -92,10 +92,13 @@ spring:
 
 ```bash
 ./gradlew test        # 单元与契约测试：不需要任何外部依赖
-./gradlew build       # 完整验收：测试 + ArchUnit 架构守护 + 格式检查
+./gradlew build       # 完整验收：测试 + ArchUnit 架构守护 + 格式检查 + 覆盖率与 CRAP 门禁
+scripts/qa-gate.sh   # 提交前验收（等价于 ./gradlew build；失败时打印哪道门禁失败、证据与下一步）
 ./gradlew bootRun     # 启动服务（或 scripts/dev-run.sh）
 scripts/dev-it.sh     # 集成测试：podman 起真实数据库，跑完自动删容器
 ```
+
+`./gradlew build` 除测试、架构守护与格式检查外，还强制两项质量门禁（任一不达标即失败）：覆盖率为 JaCoCo 采集的 bundle 覆盖比值，下限由 `gradle.properties` 的 `coverageLineMin` / `coverageBranchMin` 给出；CRAP 由 `build.gradle.kts` 里的 `crapReport` / `crapCheck` 从 JaCoCo XML 逐方法现算，上限为 `crapMax`。报告落点：`build/reports/jacoco/test/html/index.html`（覆盖率）、`build/reports/crap/crap.txt`（CRAP 明细）。
 
 端点：`GET /api/health`（轻量探活）、`GET /actuator/health`（进程级健康）、`GET /doc.html`（knife4j 文档站）、`GET /v3/api-docs`（OAS 文档）。
 
@@ -146,7 +149,7 @@ ratchet 需要能解析 HEAD，两种情况会让 Spotless 硬失败：不在 gi
 | 目标 | 规则 |
 | --- | --- |
 | `src/*/java/**/*.java` | palantir-java-format（4 空格、120 列）；import 固定分组 `java → javax/jakarta → org → 其它第三方 → 本项目`；删除未使用的 import；去行尾空白、末尾补换行 |
-| `*.md`、`*.yml`、`*.yaml`、`*.toml`、`*.sql`、`*.kts`、`*.sh`、`.env.example`、`.gitignore`、`.editorconfig` | 去行尾空白、末尾补换行 |
+| `*.md`、`docs/**/*.md`、`*.yml`、`*.yaml`、`*.toml`、`*.sql`、`*.kts`、`*.sh`、`.env.example`、`.gitignore`、`.editorconfig` | 去行尾空白、末尾补换行 |
 
 import 分组必须显式固定：palantir 默认按字母序排全部 import，本项目包名（如 `com.acme.order`）会插进第三方中间，于是同一份模板在不同包名下格式化结果不同，模板无法预先格式化干净。固定分组后未匹配任何前缀的 import 落在最后一组，格式与包名无关。
 
@@ -159,7 +162,7 @@ import 分组必须显式固定：palantir 默认按字母序排全部 import，
 3. 在 `ArchitectureTest.CONTEXTS` 登记上下文名；若该上下文要与别的上下文协作，先定义它的应用层端口并登记进 `PUBLISHED_CROSS_CONTEXT_PORTS`。
 4. 在 `CacheNames` 登记该上下文的缓存名（若使用缓存）。
 5. 删除 `sample` 包与 `src/test/java` 下对应的测试。
-6. 在 `AGENTS.md` 的「目录职责」表补一行说明该上下文，并在「跨上下文」约束下补充它的出口（若有）；`CLAUDE.md` 不用动（它只指向 `AGENTS.md`）。
+6. 在 `docs/scaffold/structure.md` 的「目录职责」表补一行说明该上下文，并在「分层与依赖规则」下补充它的出口（若有）；`AGENTS.md` 与 `CLAUDE.md` 不用动。
 
 ## 八、扩展底座
 
@@ -192,7 +195,7 @@ components/cache-redis/      # 缓存能力组件
 
 指令行的注释前缀可以是 `//`、`#`、`--`、`/*`、`*`、`<!--`，因此模板在多数语言里仍可当合法注释阅读。表达式支持 `==`、`!=`、`in`、`and`、`or`、`not`。
 
-要在 markdown 表格中间条件化某一行，指令写成 `|?if ...` / `|?endif`（允许前导与尾随竖线）：指令行在渲染时被删除，输出仍是连续表格。⚠️ 不要用独立的 `?if` 段来条件化表格行 —— 那会把表格切断。同理，条件段之间的空行要在两个分支里都存在，否则某个分支渲染出来会缺空行（把内容做成表内条件行可以完全回避这个问题，`AGENTS.md` 即如此）。
+要在 markdown 表格中间条件化某一行，指令写成 `|?if ...` / `|?endif`（允许前导与尾随竖线）：指令行在渲染时被删除，输出仍是连续表格。⚠️ 不要用独立的 `?if` 段来条件化表格行 —— 那会把表格切断。同理，条件段之间的空行要在两个分支里都存在，否则某个分支渲染出来会缺空行（把内容做成表内条件行可以完全回避这个问题，`docs/scaffold/structure.md` 与 `docs/scaffold/data-cache.md` 即如此）。
 
 生成器对 `gradlew` 与 `*.sh` 会设置可执行位（`0o755`）：模板里 `scripts/` 下的脚本拷进新项目后必须能直接执行。
 
@@ -208,7 +211,7 @@ uvx --from shellcheck-py shellcheck -S warning -x scripts/*.sh scripts/lib/*.sh
 
 加新组件：在 `components/` 下新建目录（如 `cache-caffeine` 的形状），在 `scripts/scaffold.py` 的 `DATA_COMPONENTS` / `CACHE_COMPONENTS` 里登记名称与目录。加新底座：在 `templates/` 下新建目录，至少含 `base/`，在 `SKILL.md` 的底座清单里加一行，并写一份对应的 `references/<底座>.md`。
 
-维护提醒：模板目录里出现 `bin/`、`build/`、`.gradle/`、`.idea/` 时说明有人就地构建过；生成器会跳过这些目录，仓库 `.gitignore` 也已忽略，但应当清理。
+维护提醒：模板目录里出现 `bin/`、`build/`、`.gradle/`、`.idea/` 时说明有人就地构建过；生成器会跳过这些目录，仓库 `.gitignore` 也已忽略，但应当清理。改命令、脚本行为或数据 / 缓存约定时，同步更新 `README.md` 与 `docs/scaffold/` 下对应的那一篇，`AGENTS.md` 只在硬约束或文档地图变化时动。
 
 ## 九、选型与代价
 
@@ -239,3 +242,7 @@ uvx --from shellcheck-py shellcheck -S warning -x scripts/*.sh scripts/lib/*.sh
 文档站另在 `mongodb` + `caffeine` 上实跑确认：`/doc.html` 返回 knife4j UI（`text/html`），`/v3/api-docs/default` 返回 OAS 3.1.0 且含 `/api/**` 分组的全部接口，`/swagger-ui/index.html` 同时可用；`prod` profile 下 `/doc.html` 返回拒绝页而 `/api/health` 仍为 200。
 
 代码格式：六个组合与三种包名（`zz.qq`、46 字符长包名、`io.github.alphagodzilla.someapp`）的 `./gradlew spotlessCheck` 全部通过。ratchet 语义用对照实验确认：提交时已存在的不合规文件既不被检查也不被改写，提交后修改的文件与新增未跟踪文件都被检查并改写；`git init` 但尚无提交时不再报 `No such reference 'HEAD'`。
+
+覆盖率与 CRAP 门禁：六个组合实跑 `./gradlew build` 全部通过，实测行覆盖 70.6%（`mongodb`）~ 72.5%（`postgres` / `mysql`）、分支覆盖 74.1%，89 个方法里最高 CRAP 6.1；删除 `sample` 占位上下文后骨架自身行覆盖 87.5%。门禁的拦截能力用反例确认：注入一个圈复杂度 9、零覆盖的方法后 `crapCheck` 报 `CRAP 门禁未通过：1 个方法超过 crapMax=30`（该方法 90.0 分），`-PcoverageLineMin=0.95` 时 `jacocoTestCoverageVerification` 报 `lines covered ratio is 0.72, but expected minimum is 0.95`。合并两层覆盖率另在 `mongodb` + `redis` 上用 `scripts/dev-it.sh build` 实测：行覆盖 70.6% → 92.2%、分支覆盖 74.1% → 79.6%，跑完容器 0 残留。
+
+`scripts/qa-gate.sh` 在六个组合上实跑通过（成功路径打印测试类/用例数、覆盖率与最高 CRAP）。它的失败引导按场景逐个实测：编译错误（列出 `文件:行: 错误` 并去重）、测试失败（类 + 用例 + 反转义后的断言消息，每类最多 5 条）、架构违规（额外指向 `docs/scaffold/structure.md` 的分层规则）、Spotless 违规（列出违规文件）、覆盖率不足（`Rule violated` 原文 + 未覆盖行最多的 5 个类及其源码路径）、CRAP 越界（方法 + 源码路径）；**覆盖率门禁先失败导致 `crap.txt` 未生成时，脚本会补跑一次 `crapReport` 以拿到 CRAP 明细**（该路径单独实测）。脚本经 `bash -n` 与 `shellcheck -S warning -x` 检查无告警，渲染后与模板逐字节一致。

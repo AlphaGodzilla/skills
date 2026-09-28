@@ -1,5 +1,9 @@
+import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Element
+
 plugins {
     java
+    jacoco
     alias(libs.plugins.spring.boot)
     alias(libs.plugins.spotless)
 }
@@ -112,7 +116,7 @@ spotless {
 
     format("misc") {
         target(
-            "*.md", "*.yml", "*.yaml", "*.toml", "*.sql", "*.kts", "*.sh",
+            "*.md", "docs/**/*.md", "*.yml", "*.yaml", "*.toml", "*.sql", "*.kts", "*.sh",
             "**/*.sh", ".env.example", ".gitignore", ".editorconfig")
         targetExclude("build/**")
         trimTrailingWhitespace()
@@ -122,3 +126,154 @@ spotless {
 
 // Boot 插件默认与 bootJar 并存产出 -plain.jar；容器构建用 build/libs/*.jar 复制时会多源失效
 tasks.named<Jar>("jar") { enabled = false }
+
+// ── 覆盖率与 CRAP 质量门禁 ────────────────────────────────
+// 覆盖率由 JaCoCo 采集并落成 XML / HTML 报告；CRAP 分数由下面的 crapReport 任务从 XML 现算：
+//     CRAP(m) = comp(m)^2 × (1 - cov(m))^3 + comp(m)
+// comp 是方法的圈复杂度（JaCoCo 的 COMPLEXITY 计数器，missed + covered），cov 是方法的行覆盖率。
+// 圈复杂度越高、越缺测试，分数上升越快：comp=6 且零覆盖就有 42 分，正是该指标要暴露的风险。
+// 阈值来自 gradle.properties，命令行可用 -P 覆盖：./gradlew build -PcrapMax=50
+val coverageLineMin = providers.gradleProperty("coverageLineMin").getOrElse("0.65")
+val coverageBranchMin = providers.gradleProperty("coverageBranchMin").getOrElse("0.65")
+val crapMaxScore = providers.gradleProperty("crapMax").getOrElse("30")
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        // XML 是 CRAP 的计算输入；HTML 供人阅读（build/reports/jacoco/test/html/index.html）
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+}
+
+// 覆盖率下限：低于阈值即让 build 失败。口径是整个 bundle（main 的全部类）的覆盖比值。
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = coverageLineMin.toBigDecimal()
+            }
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = coverageBranchMin.toBigDecimal()
+            }
+        }
+    }
+}
+
+/** 一个方法的 CRAP 记录：method 是「全限定类名.方法名」，coverage 是行覆盖率（0~1）。 */
+data class CrapRow(val method: String, val complexity: Int, val coverage: Double, val score: Double)
+
+/** CRAP 公式：复杂度平方 × 未覆盖比例的三次方 + 复杂度。 */
+fun crapScore(complexity: Int, coverage: Double): Double {
+    val uncovered = 1.0 - coverage
+    return complexity.toDouble() * complexity * uncovered * uncovered * uncovered + complexity
+}
+
+/** 读 JaCoCo XML，逐方法算 CRAP，按分数降序返回。无行可覆盖的方法（抽象方法等）按全覆盖计。 */
+fun readCrapRows(xml: File): List<CrapRow> {
+    if (!xml.isFile) {
+        throw GradleException("找不到 JaCoCo 报告 ${xml.path}；先跑 ./gradlew jacocoTestReport")
+    }
+    // JaCoCo 的 XML 带 DOCTYPE（外部 DTD）：必须关掉外部实体加载，否则解析器会去磁盘找 report.dtd 并失败
+    val factory = DocumentBuilderFactory.newInstance().apply {
+        setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+        setFeature("http://xml.org/sax/features/external-general-entities", false)
+        setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+    }
+    val document = factory.newDocumentBuilder().parse(xml)
+    val classes = document.getElementsByTagName("class")
+    val rows = mutableListOf<CrapRow>()
+    for (i in 0 until classes.length) {
+        val owner = classes.item(i) as Element
+        val className = owner.getAttribute("name").replace('/', '.')
+        val methods = owner.getElementsByTagName("method")
+        for (j in 0 until methods.length) {
+            val method = methods.item(j) as Element
+            var complexity = 0
+            var uncoveredLines = 0
+            var coveredLines = 0
+            val counters = method.getElementsByTagName("counter")
+            for (k in 0 until counters.length) {
+                val counter = counters.item(k) as Element
+                when (counter.getAttribute("type")) {
+                    "COMPLEXITY" -> complexity = counter.getAttribute("missed").toInt() + counter.getAttribute("covered").toInt()
+                    "LINE" -> {
+                        uncoveredLines = counter.getAttribute("missed").toInt()
+                        coveredLines = counter.getAttribute("covered").toInt()
+                    }
+                }
+            }
+            val lines = uncoveredLines + coveredLines
+            val coverage = if (lines == 0) 1.0 else coveredLines.toDouble() / lines
+            val name = "${className}.${method.getAttribute("name")}"
+            rows += CrapRow(name, complexity, coverage, crapScore(complexity, coverage))
+        }
+    }
+    return rows.sortedByDescending { it.score }
+}
+
+val crapXmlReport = layout.buildDirectory.file("reports/jacoco/test/jacocoTestReport.xml")
+val crapTextReport = layout.buildDirectory.file("reports/crap/crap.txt")
+
+/** 生成 CRAP 报告文件并在控制台列出分数最高的方法（只报告，不判定）。 */
+val crapReport by tasks.registering {
+    group = "verification"
+    description = "从 JaCoCo 报告计算逐方法 CRAP 分数并写出 build/reports/crap/crap.txt"
+    dependsOn(tasks.jacocoTestReport)
+    val xml = crapXmlReport
+    val target = crapTextReport
+    val threshold = crapMaxScore
+    doLast {
+        val rows = readCrapRows(xml.get().asFile)
+        val content = buildString {
+            appendLine("CRAP 报告 —— CRAP(m) = comp(m)^2 × (1 - cov(m))^3 + comp(m)")
+            appendLine("阈值 crapMax = $threshold；方法总数 ${rows.size}；按 CRAP 降序")
+            appendLine()
+            appendLine("CRAP    复杂度  行覆盖   方法")
+            rows.forEach {
+                appendLine("%8.1f %6d %7.1f%%   %s".format(it.score, it.complexity, it.coverage * 100, it.method))
+            }
+        }
+        target.get().asFile.apply { parentFile.mkdirs() }.writeText(content)
+        println("CRAP 报告已写入 ${target.get().asFile}")
+        println("分数最高的方法（阈值 crapMax = $threshold）：")
+        rows.take(10).forEach {
+            println("  %8.1f  复杂度 %-3d 行覆盖 %5.1f%%  %s".format(it.score, it.complexity, it.coverage * 100, it.method))
+        }
+    }
+}
+
+/** CRAP 门禁：任一方法分数超过 crapMax 即失败，并列出越界方法与调阈值的办法。 */
+val crapCheck by tasks.registering {
+    group = "verification"
+    description = "CRAP 门禁：任一方法分数超过 crapMax 即失败"
+    dependsOn(crapReport)
+    val xml = crapXmlReport
+    val threshold = crapMaxScore
+    doLast {
+        val rows = readCrapRows(xml.get().asFile)
+        val overLimit = rows.filter { it.score > threshold.toDouble() }
+        if (overLimit.isNotEmpty()) {
+            val detail = overLimit.joinToString("\n") {
+                "  %8.1f  复杂度 %-3d 行覆盖 %5.1f%%  %s".format(it.score, it.complexity, it.coverage * 100, it.method)
+            }
+            throw GradleException(
+                "CRAP 门禁未通过：${overLimit.size} 个方法超过 crapMax=$threshold\n$detail\n" +
+                    "修法：为这些方法补单元测试（提高行覆盖），或拆小圈复杂度；" +
+                    "确需放宽时用 -PcrapMax=<新阈值>，并同步改 gradle.properties"
+            )
+        }
+        println("CRAP 门禁通过：最高 ${rows.firstOrNull()?.let { "%.1f".format(it.score) } ?: "0.0"}（阈值 $threshold，共 ${rows.size} 个方法）")
+    }
+}
+
+// 覆盖率下限与 CRAP 门禁都挂在 check 上，因此 ./gradlew build 会强制它们。
+tasks.named("check") {
+    dependsOn(tasks.jacocoTestCoverageVerification, crapCheck)
+}
