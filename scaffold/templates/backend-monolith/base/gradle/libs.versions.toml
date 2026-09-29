@@ -13,6 +13,10 @@ spotless = "8.10.3"
 # 排除它传递的 springdoc 2.x，改用上面的 springdoc 3.1.x 线
 knife4j = "4.4.0"
 
+# 变异测试（可选门禁）：PIT 只在显式执行 pitest 任务时解析，日常 build 不下载
+pitest = "1.30.0"
+pitestJunit5 = "1.2.3"
+
 [libraries]
 # Boot 4 的 Gradle 插件不向项目注入依赖管理，versionless 条目全靠这个 BOM 解析版本
 spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
@@ -27,6 +31,10 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 
 # 架构守护：@AnalyzeClasses / @ArchTest 的 JUnit 5 集成
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+
+# 变异测试（可选门禁）：命令行版 PIT + JUnit 5 支持；挂在独立 configuration 上，日常构建不解析
+pitest-command-line = { module = "org.pitest:pitest-command-line", version.ref = "pitest" }
+pitest-junit5-plugin = { module = "org.pitest:pitest-junit5-plugin", version.ref = "pitestJunit5" }
 
 # API 文档站：springdoc 生成 OAS，UI 走它的 webmvc-ui
 springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }

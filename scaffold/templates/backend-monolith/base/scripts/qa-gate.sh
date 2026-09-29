@@ -243,6 +243,7 @@ cat <<'TXT'
 下一步（改被测代码，不要改测试或门禁本身）：
   · 修完重跑：scripts/qa-gate.sh
   · 只看 CRAP 分数：./gradlew crapReport
+  · 变异测试（可选，慢）：scripts/mutation-gate.sh（默认只变异变更类；详见 docs/scaffold/development.md）
   · 只看覆盖率：./gradlew jacocoTestReport（报告在 build/reports/jacoco/test/html/index.html）
   · 只重跑某个测试类：./gradlew test --tests 'com.acme.app.SomeTest'
   · 改动涉及仓储 / 迁移脚本 / 缓存等只有真实库能验证的东西：scripts/dev-it.sh（本脚本不含集成测试）

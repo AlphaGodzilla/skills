@@ -23,9 +23,10 @@
 | `src/test/java/<pkg>/ApplicationSmokeTest.java` | 冒烟：上下文能起、`/actuator/health` 为 `{"status":"UP"}` |
 | `src/test/java/<pkg>/sample/**` | 分层测试样例：领域单测、用例单测（测试替身）、REST 契约测试，以及集成测试 `SampleIntegrationIT`（`@Tag("integration")`，跑真实数据库） |
 | `.env.example` | 可选的本机覆盖项（端口冲突时的 `DB_HOST_PORT`、真实库凭据）；复制为 `.env`（已 gitignore） |
-| `scripts/` | 开发辅助脚本：`qa-gate.sh`（提交前验收：跑门禁并在失败时给定位引导）、`dev-test.sh`（单元/契约测试）、`dev-it.sh`（集成测试：podman 起容器并在结束时删除）、`dev-run.sh`（本地起服务）、`create-tag.sh`（打 tag）、`podman-testcontainers.sh`（仅改用 Testcontainers 时需要）、`lib/*.sh`（供 source 的库）。用法见第五节 |
+| `scripts/` | 开发辅助脚本：`qa-gate.sh`（提交前验收：跑门禁并在失败时给定位引导）、`mutation-gate.sh`（**可选**变异测试门禁：默认只变异相对基线的变更类，不参与 `./gradlew build`）、`dev-test.sh`（单元/契约测试）、`dev-it.sh`（集成测试：podman 起容器并在结束时删除）、`dev-run.sh`（本地起服务）、`create-tag.sh`（打 tag）、`podman-testcontainers.sh`（仅改用 Testcontainers 时需要）、`lib/*.sh`（供 source 的库）。用法见第五节 |
 | `.codegraph/` | 本机 CodeGraph 索引（生成器在装了 CLI 时用 `codegraph init --yes` 建立，约 0.5s）。生成物已在项目 `.gitignore` 里忽略整个 `.codegraph/`，不入库；`codegraph status` 看统计，`codegraph index` 重建，`codegraph sync` 增量更新 |
 | `.gitignore`、`.editorconfig`、`README.md` | 仓库约定与项目说明 |
+| `.pi/sandbox.json` | git worktree 场景的沙箱放行。worktree 里的 `.git` 只是指向主仓库的文本文件，`git status`/`add`/`commit` 都要读写主仓库 `.git`（index、HEAD、objects、refs 都在那里），而沙箱默认只放行会话目录；模板里写成相对路径 `../{{project_name}}/.git`，渲染后即 `../<项目名>/.git`，主仓库与兄弟目录 worktree 两边解析到同一个 `.git`（相对路径的基准是 pi 进程的 cwd）。**前提**：主仓库目录名与项目名一致、worktree 建在兄弟目录（`git worktree add ../<项目名>-<分支>`）；把 worktree 放进 `<仓库>/.worktree/<名字>` 时该条目不匹配，需要另加 `../../.git` |
 | `AGENTS.md`、`CLAUDE.md`、`docs/scaffold/*.md` | 给在本仓库工作的 agent 的指令，分入口与按需章节两层：`AGENTS.md` 只放仓库概述、硬约束与「文档地图」；细节放 `docs/scaffold/`（`development.md` 命令与测试分层、`structure.md` 目录职责与分层边界、`data-cache.md` 数据与缓存约定），由入口按任务分发，agent 只读相关的一篇。`CLAUDE.md` 只有一句指向 `AGENTS.md`。`README.md` 面向人，是 agent 指令里的**最后一档**：只在需要项目背景、技术选型理由、配置项或脚本参数的逐条说明时，才由地图路由过去读 |
 
 `sample` 上下文的分层（六边形）：
@@ -94,11 +95,14 @@ spring:
 ./gradlew test        # 单元与契约测试：不需要任何外部依赖
 ./gradlew build       # 完整验收：测试 + ArchUnit 架构守护 + 格式检查 + 覆盖率与 CRAP 门禁
 scripts/qa-gate.sh   # 提交前验收（等价于 ./gradlew build；失败时打印哪道门禁失败、证据与下一步）
+scripts/mutation-gate.sh  # 变异测试门禁（可选，慢）：默认只变异相对基线的变更类；--all 为全量
 ./gradlew bootRun     # 启动服务（或 scripts/dev-run.sh）
 scripts/dev-it.sh     # 集成测试：podman 起真实数据库，跑完自动删容器
 ```
 
 `./gradlew build` 除测试、架构守护与格式检查外，还强制两项质量门禁（任一不达标即失败）：覆盖率为 JaCoCo 采集的 bundle 覆盖比值，下限由 `gradle.properties` 的 `coverageLineMin` / `coverageBranchMin` 给出；CRAP 由 `build.gradle.kts` 里的 `crapReport` / `crapCheck` 从 JaCoCo XML 逐方法现算，上限为 `crapMax`。报告落点：`build/reports/jacoco/test/html/index.html`（覆盖率）、`build/reports/crap/crap.txt`（CRAP 明细）。
+
+变异测试是**可选门禁**，默认不参与 `./gradlew build`：PIT 依赖挂在独立的 `pitestCli` configuration 上，日常构建不解析，因此底座默认构建保持零外部依赖。它由 `./gradlew pitest` 或 `scripts/mutation-gate.sh` 显式触发，判据为存活变异体数 ≤ `mutationSurvivorsMax`（默认 0）、变异得分 ≥ `mutationScoreMin`（默认 0）、以及零覆盖变异体数（`mutationFailOnNoCoverage=true` 时判失败）；报告落点为 `build/reports/pitest/index.html` 与 `build/reports/pitest/mutations.xml`。注意 OSS 版 PIT 的增量历史（`--withHistory`）需要 Arcmutate 插件，核心版没有，因此增量只靠「只变异变更类」实现。
 
 端点：`GET /api/health`（轻量探活）、`GET /actuator/health`（进程级健康）、`GET /doc.html`（knife4j 文档站）、`GET /v3/api-docs`（OAS 文档）。
 
@@ -246,3 +250,5 @@ uvx --from shellcheck-py shellcheck -S warning -x scripts/*.sh scripts/lib/*.sh
 覆盖率与 CRAP 门禁：六个组合实跑 `./gradlew build` 全部通过，实测行覆盖 70.6%（`mongodb`）~ 72.5%（`postgres` / `mysql`）、分支覆盖 74.1%，89 个方法里最高 CRAP 6.1；删除 `sample` 占位上下文后骨架自身行覆盖 87.5%。门禁的拦截能力用反例确认：注入一个圈复杂度 9、零覆盖的方法后 `crapCheck` 报 `CRAP 门禁未通过：1 个方法超过 crapMax=30`（该方法 90.0 分），`-PcoverageLineMin=0.95` 时 `jacocoTestCoverageVerification` 报 `lines covered ratio is 0.72, but expected minimum is 0.95`。合并两层覆盖率另在 `mongodb` + `redis` 上用 `scripts/dev-it.sh build` 实测：行覆盖 70.6% → 92.2%、分支覆盖 74.1% → 79.6%，跑完容器 0 残留。
 
 `scripts/qa-gate.sh` 在六个组合上实跑通过（成功路径打印测试类/用例数、覆盖率与最高 CRAP）。它的失败引导按场景逐个实测：编译错误（列出 `文件:行: 错误` 并去重）、测试失败（类 + 用例 + 反转义后的断言消息，每类最多 5 条）、架构违规（额外指向 `docs/scaffold/structure.md` 的分层规则）、Spotless 违规（列出违规文件）、覆盖率不足（`Rule violated` 原文 + 未覆盖行最多的 5 个类及其源码路径）、CRAP 越界（方法 + 源码路径）；**覆盖率门禁先失败导致 `crap.txt` 未生成时，脚本会补跑一次 `crapReport` 以拿到 CRAP 明细**（该路径单独实测）。脚本经 `bash -n` 与 `shellcheck -S warning -x` 检查无告警，渲染后与模板逐字节一致。
+
+变异测试门禁：PIT 1.30.0 + pitest-junit5-plugin 1.2.3，`scripts/mutation-gate.sh` 实跑通过。全量（`--all`，4 线程）实测 114 个变异体：killed 59、survived 25、零覆盖 30，得分 51.8%，耗时 38 秒；单类（`--class ...Sample`）实测 11 个变异体、10 killed、1 survived，脚本准确定位到 `Sample.normalizeDescription:64` 的 `ConditionalsBoundaryMutator` 并按阈值退出 1。`./gradlew build` 实测不含 `pitest` 任务（可选门禁成立）。

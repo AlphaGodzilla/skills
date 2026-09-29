@@ -18,7 +18,7 @@
 5. **格式由 Spotless 拥有**：用 `./gradlew spotlessApply` 格式化，不要手工调缩进与 import 顺序。
 6. **测试不许引入隐式外部依赖**：新增单元 / 契约测试必须能离线跑；需要真实数据库的断言放进集成测试（`@Tag("integration")` + `IT` 后缀），由 `scripts/dev-it.sh` 起容器执行。
 7. **本仓库不负责部署阶段**：不要添加镜像构建、编排或环境清单文件；运行形态与生产凭据由部署方决定。
-8. **不许为了让门禁变绿而改测试或门禁本身**：测试代码、测试资源与测试配置（断言、`excludeTags`、测试 profile）、门禁阈值（`gradle.properties` 的 `coverageLineMin` / `coverageBranchMin` / `crapMax`）、排除规则，都不得为了让 `scripts/qa-gate.sh` 通过而修改；用 `-x` / `--rerun-tasks` 之类绕过同样不行。门禁失败只能靠**改被测代码或补测试**解决；确需放宽阈值时，单独提交并写明理由。
+8. **不许为了让门禁变绿而改测试或门禁本身**：测试代码、测试资源与测试配置（断言、`excludeTags`、测试 profile）、门禁阈值（`gradle.properties` 的 `coverageLineMin` / `coverageBranchMin` / `crapMax` / `mutationSurvivorsMax` / `mutationScoreMin`）、排除规则，都不得为了让 `scripts/qa-gate.sh` 或 `scripts/mutation-gate.sh` 通过而修改；用 `-x` / `--rerun-tasks` 之类绕过同样不行。门禁失败只能靠**改被测代码或补测试**解决；确需放宽阈值时，单独提交并写明理由。
 
 ## 文档地图
 
@@ -27,6 +27,7 @@
 | 要做什么 | 先读 |
 | --- | --- |
 | 跑测试、跑服务、看接口文档，判断该跑哪一层测试 | [`docs/scaffold/development.md`](docs/scaffold/development.md) |
+| 在 git worktree / 沙箱里跑命令，git 报 `not a git repository` | [`docs/scaffold/development.md`](docs/scaffold/development.md)（「在 git worktree 里跑命令」一节） |
 | 判断一段代码该放哪个包、新增限界上下文 | [`docs/scaffold/structure.md`](docs/scaffold/structure.md) |
 | 改仓储实现、迁移脚本、缓存用法 | [`docs/scaffold/data-cache.md`](docs/scaffold/data-cache.md) |
 | 需要项目背景、技术选型理由、配置项或脚本参数的逐条说明（面向人的完整文档） | [`README.md`](README.md) |

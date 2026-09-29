@@ -277,3 +277,67 @@ val crapCheck by tasks.registering {
 tasks.named("check") {
     dependsOn(tasks.jacocoTestCoverageVerification, crapCheck)
 }
+
+// ── 变异测试（可选门禁，默认不参与 build）──────────────────
+// 设计约束：
+//   1) 默认不参与 build / check：只有显式执行 ./gradlew pitest 或 scripts/mutation-gate.sh 才触发。
+//   2) PIT 依赖放在独立的 pitestCli configuration 上，日常构建不解析，底座默认构建保持零外部依赖。
+//   3) 目标类、算子、线程数由 -P 属性覆盖；门禁阈值与判定逻辑在 scripts/mutation-gate.sh。
+//   4) 报告：build/reports/pitest/index.html（人读）与 build/reports/pitest/mutations.xml（脚本与 agent 解析）。
+val pitestCli: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+dependencies {
+    pitestCli(libs.pitest.command.line)
+    pitestCli(libs.pitest.junit5.plugin)
+}
+
+val pitestReportDir = layout.buildDirectory.dir("reports/pitest")
+val pitestSourceDir = layout.projectDirectory.dir("src/main/java").asFile.absolutePath
+// mutableCodePaths 是「类路径根」（编译输出目录），不是源码目录；sourceDirs 才是源码目录。
+val pitestMutableCodePaths = sourceSets.main.get().output.classesDirs.asPath
+
+val pitest by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "变异测试（可选门禁，默认不参与 build）；建议用 scripts/mutation-gate.sh 调用"
+    dependsOn("testClasses")
+
+    // 项目 classpath 直接挂在 PIT 启动 JVM 上，由 PIT 的 includeLaunchClasspath（默认 true）接管。
+    // 注意：--classPath 参数是按逗号切分的，不能用平台路径分隔符拼接（会把整串当成一个元素）。
+    classpath = pitestCli + sourceSets.test.get().runtimeClasspath
+    mainClass = "org.pitest.mutationtest.commandline.MutationCoverageReport"
+    workingDir = layout.projectDirectory.asFile
+
+    val targetClasses = providers.gradleProperty("pitestTargetClasses").orElse("{{package}}.*")
+    val targetTests = providers.gradleProperty("pitestTargetTests").orElse("*Test")
+    val mutators = providers.gradleProperty("pitestMutators").orElse("DEFAULTS")
+    val threads = providers.gradleProperty("pitestThreads").orElse("4")
+    val excludedClasses = providers.gradleProperty("pitestExcludedClasses")
+        .orElse("{{package}}.sample.support.*,*Test,*IT")
+    val excludedGroups = providers.gradleProperty("pitestExcludedGroups").orElse("integration")
+    val maxSurviving = providers.gradleProperty("mutationSurvivorsMax").orElse("0")
+    val mutationThreshold = providers.gradleProperty("mutationScoreMin").orElse("0")
+    val reportDir = pitestReportDir
+
+    doFirst {
+        val pitestArgs = mutableListOf(
+            "--reportDir", reportDir.get().asFile.absolutePath,
+            "--sourceDirs", pitestSourceDir,
+            "--mutableCodePaths", pitestMutableCodePaths,
+            "--targetClasses", targetClasses.get(),
+            "--targetTests", targetTests.get(),
+            "--excludedClasses", excludedClasses.get(),
+            "--mutators", mutators.get(),
+            "--threads", threads.get(),
+            "--outputFormats", "XML,HTML",
+            "--timestampedReports", "false",
+            "--excludedGroups", excludedGroups.get(),
+            "--maxSurviving", maxSurviving.get(),
+            "--mutationThreshold", mutationThreshold.get(),
+            "--failWhenNoMutations", "false",
+        )
+        args = pitestArgs
+    }
+}

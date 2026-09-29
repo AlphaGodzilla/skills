@@ -67,15 +67,17 @@ uv run <skill 目录>/scripts/scaffold.py \
 
 1. 删除 `sample` 上下文与它的测试，按同样形状建真实限界上下文；在 `IdPrefix` 登记两位前缀，在 `ArchitectureTest.CONTEXTS` 登记上下文名。
 2. 用 `adr-writing` 把底座选型记成 ADR：框架版本、数据能力、缓存能力、分层约定各记一条或合并成一条。
+3. 确保 `.pi/sandbox.json` 随首次提交入库：它是 worktree 会话里 git 可用（读写主仓库 `.git`）的前提，未入库则新 worktree 拿不到这个文件（未跟踪文件不会被 `git worktree add` 带过去）。
 
-底座已包含、无需用户再做的部分：Gradle 构建与 wrapper、Spotless 代码格式化（`ratchetFrom HEAD`，只格式化未提交的改动）、六边形分层骨架、RFC 7807 错误体、ULID id 生成、ArchUnit 架构守护、健康端点、API 文档站（springdoc + knife4j）、不依赖外部依赖的单元/契约测试 profile、集成测试脚手架（`@Tag("integration")` + `scripts/dev-it.sh`：podman 起容器并在结束时删除）、覆盖率与 CRAP 门禁（JaCoCo 覆盖率下限 + 从 JaCoCo XML 逐方法现算的 CRAP 上限，阈值在 `gradle.properties`）、CodeGraph 索引（本机装了 CLI 时生成器已执行 `codegraph init -y`）、给 agent 的渐进式指令（入口 `AGENTS.md` 只放硬约束与「文档地图」，细节章节在 `docs/scaffold/` 下按需读；`CLAUDE.md` 只指向入口）。**底座不覆盖部署阶段**：不要生成镜像构建、编排或环境清单文件。
+底座已包含、无需用户再做的部分：Gradle 构建与 wrapper、Spotless 代码格式化（`ratchetFrom HEAD`，只格式化未提交的改动）、六边形分层骨架、RFC 7807 错误体、ULID id 生成、ArchUnit 架构守护、健康端点、API 文档站（springdoc + knife4j）、不依赖外部依赖的单元/契约测试 profile、集成测试脚手架（`@Tag("integration")` + `scripts/dev-it.sh`：podman 起容器并在结束时删除）、覆盖率与 CRAP 门禁（JaCoCo 覆盖率下限 + 从 JaCoCo XML 逐方法现算的 CRAP 上限，阈值在 `gradle.properties`）、**可选的变异测试门禁**（`scripts/mutation-gate.sh` + `./gradlew pitest`，默认只变异相对基线的变更类；PIT 依赖挂在独立 configuration 上，不参与 `./gradlew build`，默认构建仍零外部依赖）、CodeGraph 索引（本机装了 CLI 时生成器已执行 `codegraph init -y`）、给 agent 的渐进式指令（入口 `AGENTS.md` 只放硬约束与「文档地图」，细节章节在 `docs/scaffold/` 下按需读；`CLAUDE.md` 只指向入口）。**底座不覆盖部署阶段**：不要生成镜像构建、编排或环境清单文件。
 
-提交前验收脚本 `scripts/qa-gate.sh` 也在底座里：它跑上述门禁，失败时打印「哪一道门禁失败、证据文件、下一步命令」，并在输出里重申上述禁止改测试与阈值的约束。
+提交前验收脚本 `scripts/qa-gate.sh` 也在底座里：它跑上述门禁，失败时打印「哪一道门禁失败、证据文件、下一步命令」，并在输出里重申上述禁止改测试与阈值的约束。变异测试是**可选门禁**，不在 `./gradlew build` 内，由 `scripts/mutation-gate.sh` 显式触发（默认只变异变更类，`--all` 为全量）。
 
 ## 自检
 
 - [ ] 四个参数齐全，数据能力与缓存能力取值在允许集合内
 - [ ] 生成目录结构符合 `references/backend-monolith.md` 的描述
-- [ ] `./gradlew build` 通过（含覆盖率与 CRAP 门禁）
+- [ ] `./gradlew build` 通过（含覆盖率与 CRAP 门禁），且 `pitest` 未被 `build` 触发
+- [ ] `scripts/mutation-gate.sh --class <某个类>` 可跑通并给出存活/零覆盖明细
 - [ ] 报告写明数据能力与缓存能力，并给出两项收尾提醒
 - [ ] 未就框架、分层或构建形态向用户提问

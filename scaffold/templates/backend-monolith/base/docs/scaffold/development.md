@@ -10,6 +10,7 @@
 | 跑单个单元 / 契约测试类 | `scripts/dev-test.sh --tests '{{package}}.shared.id.UlidTest'` |
 | 跑集成测试（用 podman 起真实数据库，跑完自动删容器） | `scripts/dev-it.sh` |
 | 完整验收（提交前必过）：测试 + ArchUnit 架构守护 + 格式检查 + 覆盖率与 CRAP 门禁 | `scripts/qa-gate.sh`（等价于 `./gradlew build`，失败时给定位引导） |
+| 变异测试门禁（**可选**，不属于 `./gradlew build`） | `scripts/mutation-gate.sh`（默认只变异相对基线的变更类）；也可 `./gradlew pitest` |
 | 格式化（只作用于相对 HEAD 有改动的文件） | `./gradlew spotlessApply` |
 | 启动服务 | `scripts/dev-run.sh`（应用参数放 `--` 之后），或 `./gradlew bootRun` |
 
@@ -34,9 +35,32 @@ CRAP = `comp^2 × (1 - cov)^3 + comp`（comp 是方法圈复杂度，cov 是行�
 
 门禁失败只有两种修法：**改被测代码，或补测试**。不要改测试代码 / 断言 / 测试配置，也不要调低 `gradle.properties` 的阈值或加排除规则——那是把问题藏起来（见 [`AGENTS.md`](../../AGENTS.md) 硬约束 8）。
 
+## 变异测试门禁（可选）
+
+变异测试回答的是「测试有没有真正断言到行为」，补的是覆盖率看不到的那一半。它**慢**（全量约 40 秒到数分钟），因此**默认不参与 `./gradlew build`**，只在显式调用时执行：
+
+```bash
+scripts/mutation-gate.sh                          # 只变异「相对基线变更的类」（推荐日常用）
+scripts/mutation-gate.sh --all                    # 全量（夜间或核心域大改时）
+scripts/mutation-gate.sh --class {{package}}.shared.id.Ulid   # 单个类
+```
+
+判据（只针对本次被变异的类）：存活变异体数 ≤ `mutationSurvivorsMax`（默认 0）、变异得分 ≥ `mutationScoreMin`（默认 0）、以及零覆盖变异体数（`mutationFailOnNoCoverage=true` 时判失败）。阈值在 [`gradle.properties`](../../gradle.properties)，命令行用 `-PmutationSurvivorsMax=` / `-PmutationScoreMin=` 覆盖。
+
+报告：`build/reports/pitest/index.html`（人读，逐变异体给状态、算子、行号）、`build/reports/pitest/mutations.xml`（agent 解析）。日志：`build/mutation-gate.log`。
+
+读结果时的两个区分：**存活（SURVIVED）**表示测试执行到了但没有断言住这个行为，要给对应方法补断言或补边界值用例；**零覆盖（NO_COVERAGE）**表示这段代码根本没被测到，其中 `infrastructure/persistence` 的适配器在默认运行里就是零覆盖（只由集成测试覆盖），属预期，应通过 `-PpitestExcludedClasses` 排除而不是降低阈值。
+
+
 ## 其余脚本
 
 `scripts/` 下还有 `create-tag.sh`（交互式打版本 tag）、`podman-testcontainers.sh`（**仅当把集成测试改成 Testcontainers 时才需要**）、`lib/*.sh`（供脚本 source 的库）。用不到就不用管；真要用其中某个时，再读 [`README.md`](../../README.md) 的「开发辅助脚本」一节（逐条用法与参数在那里）。
+
+## 在 git worktree 里跑命令
+
+worktree 里的 `.git` 是指向主仓库的文本文件，`git status` / `add` / `commit` 都要读写主仓库的 `.git`（index、HEAD、objects、refs 都在那里），而沙箱默认只放行会话目录。仓库根目录的 `.pi/sandbox.json` 已放行相对路径 `../{{project_name}}/.git`，所以在沙箱下于兄弟目录的 worktree 里跑 git 不会再报 `fatal: not a git repository`。
+
+两条前提：worktree 建在主仓库的兄弟目录（`git worktree add ../{{project_name}}-<分支>`），且主仓库目录名与项目名一致。把 worktree 放进 `<仓库>/.worktree/<名字>` 时该条目不匹配，需要按同样的形状另加一条 `../../.git`。没启用 pi-sandbox 扩展时这个文件不参与，可忽略。
 
 ## 端点
 
