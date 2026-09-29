@@ -7,26 +7,36 @@
 
 用法（推荐用 uv 隔离环境，不污染全局 Python；uv 会按上面的内联元数据建临时环境）：
 
+    # 后端单体应用
     uv run scripts/scaffold.py --template backend-monolith \
         --name order-service --package com.acme.order \
         --db postgres --cache redis --out /path/to/parent
 
+    # 前端管理后台
+    uv run scripts/scaffold.py --template frontend-admin \
+        --name admin-web --title "订单后台" --api-target http://localhost:8080 \
+        --out /path/to/parent
+
 也可直接用系统 Python 运行：PyYAML 缺失时跳过 YAML 自检，其余功能不受影响。
 
-渲染之外还会做三件事：自检产物（占位符残留、YAML / TOML 可解析）、生成 Gradle wrapper（本机有 `gradle` 时）、
-执行 `codegraph init --yes` 建立代码索引（本机装了 `codegraph` CLI 时；未装则静默跳过，不打印提示）。
+每个底座在 `templates/<底座名>/template.py` 里声明自己的参数、能力组件、渲染后步骤与下一步提示，
+本脚本只做通用工作：条件块求值、占位符替换、产物自检、渲染后处理。
 
-模板约定见 ../references/backend-monolith.md 与 SKILL.md。
+模板约定见 ../references/*.md 与 SKILL.md。
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import json
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 # 自检用的解析器：由 PEP 723 的 dependencies 提供；用系统 Python 直接跑时允许缺席
 try:
@@ -41,16 +51,8 @@ except ImportError:
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
-# 组件目录名相对模板根目录。底座是唯一的应用模板，数据库与缓存是它的两个可选能力组件；
-# postgres 与 mysql 共用 data-jpa 组件，靠变量与条件块区分。
-DATA_COMPONENTS = {
-    "mongodb": "components/data-mongodb",
-    "postgres": "components/data-jpa",
-    "mysql": "components/data-jpa",
-}
-CACHE_COMPONENTS = {"caffeine": "components/cache-caffeine", "redis": "components/cache-redis"}
-DB_CHOICES = tuple(DATA_COMPONENTS)
-CACHE_CHOICES = tuple(CACHE_COMPONENTS)
+# 不传 --template 时的底座：保持与只有一个底座时一致的行为
+DEFAULT_TEMPLATE = "backend-monolith"
 
 # 指令行：可选注释前缀 + `?if/elif/else/endif`，其余部分是要保留的内容（指令行本身被丢弃）。
 # 注释前缀覆盖 // # -- /* * <!--，使模板在多数语言里仍可被当作合法注释阅读；
@@ -60,66 +62,117 @@ DIRECTIVE = re.compile(
 )
 PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
+# 模板目录里不该出现的构建产物与编辑器目录：即使被本地构建污染也一并跳过
+IGNORED_DIRECTORIES = {
+    # 通用
+    ".git",
+    ".idea",
+    ".vscode",
+    ".worktrees",
+    ".codegraph",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    # JVM（backend-monolith）
+    "bin",
+    "build",
+    "out",
+    "target",
+    ".gradle",
+    # 前端（frontend-admin）
+    "dist",
+    "coverage",
+    ".umi",
+    ".umi-production",
+    ".umi-test",
+    ".umi-test-production",
+    ".turbopack",
+    # 变异测试
+    "reports",
+    ".stryker-tmp",
+}
+IGNORED_FILES = {".DS_Store"}
 
-def app_class_of(name: str) -> str:
-    """`order-service` → `OrderServiceApplication`。"""
-    parts = [p for p in re.split(r"[-_.\s]+", name) if p]
-    if not parts:
-        raise SystemExit("--name 不能为空")
-    return "".join(p[:1].upper() + p[1:] for p in parts) + "Application"
+
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+CODEGRAPH_INDEXED = re.compile(r"Indexed\s+(\d+)\s+files")
+CODEGRAPH_GRAPH = re.compile(r"(\d+)\s+nodes,\s*(\d+)\s+edges")
 
 
-def build_variables(name: str, package: str, db: str, cache: str) -> dict[str, str]:
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*", package):
-        raise SystemExit(f"--package 不是合法 Java 包名：{package}")
-    db_name = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "app"
-    variables = {
-        "project_name": name,
-        "package": package,
-        "package_path": package.replace(".", "/"),
-        "app_class": app_class_of(name),
-        "db": db,
-        "cache": cache,
-        "db_name": db_name,
-        # 关系库的应用账号：postgres 用超级用户 postgres；mysql 不能用 root ——
-        # 官方 mysql 镜像明确拒绝 MYSQL_USER=root（entrypoint 直接退出），因此改用普通账号 app
-        "db_user": "postgres" if db == "postgres" else ("app" if db == "mysql" else ""),
-        "db_password": "postgres" if db == "postgres" else ("app" if db == "mysql" else ""),
-    }
-    if db == "postgres":
-        variables.update(
-            {
-                "db_platform": "postgresql",
-                "jdbc_driver": "org.postgresql.Driver",
-                "jdbc_url": f"jdbc:postgresql://localhost:5432/{db_name}",
-                "hibernate_dialect": "org.hibernate.dialect.PostgreSQLDialect",
-                "db_port": "5432",
-            }
-        )
-    elif db == "mysql":
-        variables.update(
-            {
-                "db_platform": "mysql",
-                "jdbc_driver": "com.mysql.cj.jdbc.Driver",
-                "jdbc_url": (
-                    f"jdbc:mysql://localhost:3306/{db_name}"
-                    "?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8"
-                ),
-                "hibernate_dialect": "org.hibernate.dialect.MySQLDialect",
-                "db_port": "3306",
-            }
-        )
-    else:  # mongodb
-        variables.update(
-            {
-                "db_platform": "",
-                "jdbc_driver": "",
-                "jdbc_url": "",
-                "hibernate_dialect": "",
-                "db_port": "27017",
-            }
-        )
-    return variables
+def init_codegraph(project_dir: Path) -> None:
+    """为项目建立 CodeGraph 索引（`codegraph init --yes <项目>`）。
+
+    未安装 codegraph CLI 时**静默跳过**：不执行、不打印任何提示。
+    已安装但执行失败时只警告，不阻断——项目本身已经生成好了。
+    `--yes` 让工具跳过所有交互，适合脚本；重复执行是幂等的（工具会报 Already initialized）。
+    """
+    executable = shutil.which("codegraph")
+    if executable is None:
+        return
+
+    result = subprocess.run(
+        [executable, "init", "--yes", str(project_dir)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = ANSI_ESCAPE.sub("", f"{result.stdout}\n{result.stderr}").strip()
+
+    if result.returncode != 0:
+        print(f"⚠️  codegraph init 失败（退出码 {result.returncode}，不影响生成结果）：")
+        for line in output.splitlines()[-8:]:
+            print(f"    {line}")
+        print("    可稍后在项目根手动重试：codegraph init -y")
+        # 首次索引可能因扫描到超大文件等失败；提示用户后仍按成功交付项目
+        return
+
+    if "Already initialized" in output:
+        print("CodeGraph 索引已存在（未重建；需要重建用 codegraph index）")
+        return
+
+    indexed = CODEGRAPH_INDEXED.search(output)
+    graph = CODEGRAPH_GRAPH.search(output)
+    if indexed and graph:
+        detail = f"（{indexed.group(1)} 个文件 / {graph.group(1)} 节点 / {graph.group(2)} 边）"
+    elif indexed:
+        detail = f"（{indexed.group(1)} 个文件）"
+    else:
+        detail = ""
+    print(f"已建立 CodeGraph 索引{detail}：{project_dir.name}/.codegraph/")
+
+
+class Helpers:
+    """渲染后步骤可用的通用能力，避免每个底座重复实现。"""
+
+    which = staticmethod(shutil.which)
+    init_codegraph = staticmethod(init_codegraph)
+
+    @staticmethod
+    def run(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
+
+    @staticmethod
+    def warn(message: str) -> None:
+        print(message)
+
+
+def load_template(name: str) -> tuple[Path, ModuleType]:
+    """加载底座目录与它的 template.py。"""
+    root = TEMPLATES_DIR / name
+    if not root.is_dir():
+        available = ", ".join(sorted(p.name for p in TEMPLATES_DIR.iterdir() if p.is_dir()))
+        raise SystemExit(f"底座不存在：{name}（可选：{available}）")
+
+    module_path = root / "template.py"
+    if not module_path.is_file():
+        raise SystemExit(f"底座缺少 template.py：{module_path}")
+
+    spec = importlib.util.spec_from_file_location(f"scaffold_template_{name}", module_path)
+    if spec is None or spec.loader is None:  # pragma: no cover - 正常文件系统不会走到
+        raise SystemExit(f"无法加载底座定义：{module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return root, module
 
 
 def evaluate(expression: str, variables: dict[str, str]) -> bool:
@@ -189,33 +242,14 @@ def render_path(relative: Path, variables: dict[str, str], where: str) -> Path:
     return Path(*parts)
 
 
-def component_names(db: str, cache: str) -> list[str]:
-    """组装顺序：应用底座 + 数据能力组件 + 缓存能力组件。"""
-    return [DATA_COMPONENTS[db], CACHE_COMPONENTS[cache]]
-
-
-# 模板目录里不该出现的构建产物与编辑器目录：即使被本地构建污染也一并跳过
-IGNORED_DIRECTORIES = {
-    "bin",
-    "build",
-    "out",
-    ".gradle",
-    ".idea",
-    ".git",
-    ".codegraph",
-    ".venv",
-    "node_modules",
-    "__pycache__",
-}
-IGNORED_FILES = {".DS_Store"}
-
-
 def copy_overlay(overlay: Path, target: Path, variables: dict[str, str], written: set[Path]) -> None:
     for source in sorted(overlay.rglob("*")):
         if source.is_dir():
             continue
         relative = source.relative_to(overlay)
-        if source.name in IGNORED_FILES or any(part in IGNORED_DIRECTORIES for part in relative.parts[:-1]):
+        if source.name in IGNORED_FILES or any(
+            part in IGNORED_DIRECTORIES for part in relative.parts[:-1]
+        ):
             continue
         try:
             text = source.read_text(encoding="utf-8")
@@ -231,73 +265,28 @@ def copy_overlay(overlay: Path, target: Path, variables: dict[str, str], written
         written.add(destination)
 
 
-CODEGRAPH_INDEXED = re.compile(r"Indexed\s+(\d+)\s+files")
-CODEGRAPH_GRAPH = re.compile(r"(\d+)\s+nodes,\s*(\d+)\s+edges")
-ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+def stray_comment_ends(text: str) -> list[int]:
+    """找出「注释里提前闭合的 */」所在行号。
 
-
-def init_codegraph(project_dir: Path) -> None:
-    """为项目建立 CodeGraph 索引（`codegraph init --yes <项目>`）。
-
-    未安装 codegraph CLI 时**静默跳过**：不执行、不打印任何提示。
-    已安装但执行失败时只警告，不阻断——项目本身已经生成好了。
-    `--yes` 让工具跳过所有交互，适合脚本；重复执行是幂等的（工具会报 Already initialized）。
+    块注释里出现 `*/`（例如文档里写 `src/locales/*/menu.ts`）会提前结束注释，
+    后面剩下的内容被当成代码——这是一类只在生成后才炸的模板笔误，所以在自检里拦住。
+    判定条件：以 `*` 开头的注释延续行里出现 `*/`，且其后还有非空白内容。
     """
-    executable = shutil.which("codegraph")
-    if executable is None:
-        return
-
-    result = subprocess.run(
-        [executable, "init", "--yes", str(project_dir)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    output = ANSI_ESCAPE.sub("", f"{result.stdout}\n{result.stderr}").strip()
-
-    if result.returncode != 0:
-        print(f"⚠️  codegraph init 失败（退出码 {result.returncode}，不影响生成结果）：")
-        for line in output.splitlines()[-8:]:
-            print(f"    {line}")
-        print("    可稍后在项目根手动重试：codegraph init -y")
-        # 首次索引可能因扫描到超大文件等失败；提示用户后仍按成功交付项目
-        return
-
-    if "Already initialized" in output:
-        print("CodeGraph 索引已存在（未重建；需要重建用 codegraph index）")
-        return
-
-    indexed = CODEGRAPH_INDEXED.search(output)
-    graph = CODEGRAPH_GRAPH.search(output)
-    if indexed and graph:
-        detail = f"（{indexed.group(1)} 个文件 / {graph.group(1)} 节点 / {graph.group(2)} 边）"
-    elif indexed:
-        detail = f"（{indexed.group(1)} 个文件）"
-    else:
-        detail = ""
-    print(f"已建立 CodeGraph 索引{detail}：{project_dir.name}/.codegraph/")
-
-def generate_wrapper(project_dir: Path, gradle_version: str) -> None:
-    gradle = shutil.which("gradle")
-    if gradle is None:
-        print("⚠️  未找到 gradle，跳过 wrapper 生成；请安装 Gradle 后在项目根执行：gradle wrapper")
-        return
-    result = subprocess.run(
-        [gradle, "wrapper", "--gradle-version", gradle_version, "--no-daemon", "-q"],
-        cwd=project_dir,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        print("⚠️  生成 Gradle wrapper 失败，请手动执行 `gradle wrapper`：")
-        print(result.stderr.strip())
-    else:
-        print(f"已生成 Gradle wrapper（{gradle_version}）")
-
+    lines: list[int] = []
+    for number, line in enumerate(text.split("\n"), start=1):
+        stripped = line.strip()
+        if not stripped.startswith("*"):
+            continue
+        index = stripped[1:].find("*/")
+        if index == -1:
+            continue
+        if stripped[1:][index + 2 :].strip():
+            lines.append(number)
+    return lines
 
 
 def self_check(project_dir: Path, written: set[Path]) -> list[str]:
-    """渲染后自检：占位符残留、YAML / TOML 是否可解析。返回问题清单（空表示通过）。
+    """渲染后自检：占位符残留、YAML / TOML / JSON 是否可解析。返回问题清单（空表示通过）。
 
     这些是模板编写错误，不是用户输入错误：宁可生成时立刻失败，也不要交付一个起不来的项目。
     """
@@ -307,57 +296,112 @@ def self_check(project_dir: Path, written: set[Path]) -> list[str]:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue  # 非文本文件（理论上不会有，wrapper 在自检之后生成）
+        relative = path.relative_to(project_dir)
 
         leftover = PLACEHOLDER.search(text)
         if leftover:
-            problems.append(f"{path.relative_to(project_dir)}: 残留占位符 {{{{{leftover.group(1)}}}}}")
+            problems.append(f"{relative}: 残留占位符 {{{{{leftover.group(1)}}}}}")
 
         suffix = path.suffix.lower()
         if suffix in {".yml", ".yaml"} and yaml is not None:
             try:
                 yaml.safe_load(text)
             except yaml.YAMLError as exc:
-                problems.append(f"{path.relative_to(project_dir)}: YAML 解析失败：{exc}")
+                problems.append(f"{relative}: YAML 解析失败：{exc}")
         elif suffix == ".toml" and tomllib is not None:
             try:
                 tomllib.loads(text)
             except tomllib.TOMLDecodeError as exc:
-                problems.append(f"{path.relative_to(project_dir)}: TOML 解析失败：{exc}")
+                problems.append(f"{relative}: TOML 解析失败：{exc}")
+        elif suffix == ".json":
+            try:
+                json.loads(text)
+            except json.JSONDecodeError as exc:
+                problems.append(f"{relative}: JSON 解析失败：{exc}")
     return problems
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="从技术底座模板渲染一个新项目")
-    parser.add_argument("--template", default="backend-monolith", help="底座名（模板目录名）")
-    parser.add_argument("--name", required=True, help="项目名，同时作为 Gradle 根项目名与目录名")
-    parser.add_argument("--package", required=True, help="基础 Java 包名，如 com.acme.order")
-    parser.add_argument("--db", choices=DB_CHOICES, required=True, help="数据能力组件：mongodb / postgres / mysql")
-    parser.add_argument("--cache", choices=CACHE_CHOICES, required=True, help="缓存能力组件：caffeine / redis")
+
+def default_flag(name: str) -> str:
+    return "--" + name.replace("_", "-")
+
+
+def add_param(parser: argparse.ArgumentParser, spec: dict[str, Any]) -> None:
+    """模板变量参数：`--<名字>`，可要求必填、限定取值、限定格式。"""
+    kwargs: dict[str, Any] = {"help": spec.get("help", "")}
+    if spec.get("choices"):
+        kwargs["choices"] = spec["choices"]
+    kwargs["required"] = bool(spec.get("required"))
+    kwargs["default"] = spec.get("default")
+    parser.add_argument(spec.get("flag") or default_flag(spec["name"]), **kwargs)
+
+
+def add_option(parser: argparse.ArgumentParser, spec: dict[str, Any]) -> None:
+    """模板专属开关：如 `--skip-codegraph`。"""
+    kwargs: dict[str, Any] = {"help": spec.get("help", "")}
+    if spec.get("action"):
+        kwargs["action"] = spec["action"]
+    elif spec.get("choices"):
+        kwargs["choices"] = spec["choices"]
+    if "default" in spec:
+        kwargs["default"] = spec["default"]
+    parser.add_argument(spec.get("flag") or default_flag(spec["name"]), **kwargs)
+
+
+def validate_params(specs: list[dict[str, Any]], options: argparse.Namespace) -> None:
+    for spec in specs:
+        pattern = spec.get("pattern")
+        if not pattern:
+            continue
+        value = getattr(options, spec["name"])
+        if value and not re.fullmatch(pattern, value):
+            raise SystemExit(spec.get("pattern_error", "参数不合法：{value}").format(value=value))
+
+
+def build_parser(template: ModuleType) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=f"从技术底座模板渲染一个新项目（{template.DESCRIPTION}）"
+    )
+    parser.add_argument(
+        "--template", default=DEFAULT_TEMPLATE, help="底座名（templates/ 下的目录名）"
+    )
+    parser.add_argument("--name", required=True, help="项目名（kebab-case），同时作为目录名")
     parser.add_argument("--out", default=".", help="输出父目录（默认当前目录）")
-    parser.add_argument("--gradle-version", default="8.14.3", help="生成的 wrapper 版本")
-    parser.add_argument("--skip-wrapper", action="store_true", help="不生成 Gradle wrapper")
-    parser.add_argument("--skip-codegraph", action="store_true", help="不执行 codegraph init")
+    for spec in template.PARAMS:
+        add_param(parser, spec)
+    for spec in template.OPTIONS:
+        add_option(parser, spec)
     parser.add_argument("--force", action="store_true", help="目标目录已存在时清空重建")
-    args = parser.parse_args()
+    return parser
 
-    template_root = TEMPLATES_DIR / args.template
-    if not template_root.is_dir():
-        raise SystemExit(f"底座不存在：{args.template}（可选：{', '.join(p.name for p in TEMPLATES_DIR.iterdir())}）")
 
-    target = Path(args.out).expanduser().resolve() / args.name
+def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+
+    # --help 之外，先只解析 --template：底座名决定后面要挂哪些参数
+    prescan = argparse.ArgumentParser(add_help=False)
+    prescan.add_argument("--template", default=DEFAULT_TEMPLATE)
+    known, _ = prescan.parse_known_args(arguments)
+
+    template_root, template = load_template(known.template)
+    parser = build_parser(template)
+    options = parser.parse_args(arguments)
+    validate_params(template.PARAMS, options)
+
+    target = Path(options.out).expanduser().resolve() / options.name
     if target.exists():
-        if not args.force:
+        if not options.force:
             raise SystemExit(f"目标目录已存在：{target}（加 --force 清空重建）")
         shutil.rmtree(target)
 
-    variables = build_variables(args.name, args.package, args.db, args.cache)
+    variables = template.variables(options)
     written: set[Path] = set()
-    for overlay in ["base", *component_names(args.db, args.cache)]:
+    for overlay in ["base", *template.overlays(options)]:
         directory = template_root / overlay
         if not directory.is_dir():
             raise SystemExit(f"模板缺少目录：{directory}")
         copy_overlay(directory, target, variables, written)
 
-    print(f"已生成 {target}（{len(written)} 个文件）：db={args.db} cache={args.cache}")
+    print(f"已生成 {target}（{len(written)} 个文件）：{template.summary(options)}")
 
     if yaml is None:
         print("提示：当前 Python 无 PyYAML，已跳过 YAML 自检；用 `uv run` 运行可获得完整自检")
@@ -368,17 +412,17 @@ def main() -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    if not args.skip_wrapper:
-        generate_wrapper(target, args.gradle_version)
-    if not args.skip_codegraph:
-        init_codegraph(target)
+    template.post_generate(target, options, Helpers)
+
     print("下一步：")
     print(f"  cd {target}")
-    print("  ./gradlew test        # 单元与契约测试（不需要任何外部依赖）")
-    print("  ./gradlew build       # 完整验收：测试 + ArchUnit 架构守护 + 格式检查")
-    print("  scripts/dev-it.sh     # 集成测试（podman 起真实数据库，跑完自动删容器）")
-    print("  ./gradlew bootRun     # 启动服务")
+    for line in template.next_steps(options):
+        print(f"  {line}")
     return 0
+
+
+def run(argv: list[str] | None = None) -> int:
+    return main(argv)
 
 
 if __name__ == "__main__":

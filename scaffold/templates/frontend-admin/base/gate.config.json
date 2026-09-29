@@ -1,0 +1,17 @@
+{
+  "coverage": {
+    "lines": 80,
+    "branches": 80,
+    "functions": 80,
+    "statements": 80
+  },
+  "crap": {
+    "max": 30,
+    "top": 10
+  },
+  "mutation": {
+    "survivorsMax": 0,
+    "scoreMin": 0,
+    "failOnNoCoverage": true
+  }
+}

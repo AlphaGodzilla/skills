@@ -1,0 +1,5 @@
+{
+  "filesystem": {
+    "allowWrite": ["../order-admin/.git"]
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "name": "order-admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Order Admin —— Ant Design Pro v6 管理后台",
+  "scripts": {
+    "analyze": "cross-env ANALYZE=1 max build",
+    "build": "max build",
+    "start": "max dev",
+    "dev": "cross-env UMI_ENV=dev MOCK=none max dev",
+    "preview": "max preview --port 8000",
+    "prepare": "max setup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "tsc": "tsc --noEmit",
+    "biome:lint": "biome lint",
+    "format": "biome check --write",
+    "format:all": "biome check",
+    "format:check": "node scripts/format-gate.mjs",
+    "crap": "node scripts/crap-report.mjs",
+    "verify": "npm run format:check && npm run tsc && npm run test:coverage && npm run crap",
+    "mutation": "node --import ./scripts/stryker-ts5-register.mjs ./node_modules/@stryker-mutator/core/bin/stryker.js run"
+  },
+  "browserslist": [
+    "defaults"
+  ],
+  "dependencies": {
+    "@ant-design/icons": "^6.3.2",
+    "@ant-design/pro-components": "^3.1.14-2",
+    "antd": "^6.6.0",
+    "antd-style": "^4.1.0",
+    "dayjs": "^1.11.21",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@umijs/max": "^4.7.3",
+    "@vitest/coverage-v8": "4.1.10",
+    "cross-env": "^10.1.0",
+    "happy-dom": "^20.11.2",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^7.0.2",
+    "typescript-classic": "npm:typescript@5.9.3",
+    "vitest": "4.1.10"
+  },
+  "overrides": {
+    "@umijs/plugins": {
+      "@ant-design/pro-components": "$@ant-design/pro-components",
+      "axios": "^1.19.0"
+    },
+    "@utoo/pack": {
+      "send": "^0.19.0"
+    },
+    "dva-immer": {
+      "immer": "^9.0.6"
+    },
+    "cosmiconfig": {
+      "js-yaml": "^4.3.1"
+    },
+    "postcss": "^8.5.23"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

@@ -18,7 +18,7 @@ skill 之间除显式声明外互不依赖，可单独复制到任意仓库使�
 | `ontology-modeling` | 把业务需求转成 OMF v6 本体驱动建模框架的模型文件 M1~M6（可选 M7/MU/MM/MI） | 用户要求"按本体建模""生成 M1~M6""输出九大模型""做需求建模"，或给出一段业务需求要求产出这些模型 | [`ontology-modeling/`](ontology-modeling/SKILL.md) |
 | `doc-writing-conventions` | 撰写或修改 skill、AGENTS.md/CLAUDE.md、ADR 三类文档时的中文行文规范 | 新建或编辑 skill、写项目代理指令文件、记录架构决策 | [`doc-writing-conventions/`](doc-writing-conventions/SKILL.md) |
 | `adr-writing` | 创建、更新与维护架构决策记录（ADR），模板基于 MADR 4.0.0 中文版 | 用户说"写 ADR""沉淀决策""更新/取代 ADR"，或刚拍板技术选型、持久化方案、部署形态、模块边界等决策 | [`adr-writing/`](adr-writing/SKILL.md) |
-| `scaffold` | 从内置技术底座生成新项目骨架，替代重复选型（当前底座：后端单体应用，数据能力 mongodb/postgres/mysql，缓存能力 caffeine/redis） | 用户说"新建项目""起一个后端""搭个骨架""初始化工程"，或要求创建后端服务但未指定技术栈 | [`scaffold/`](scaffold/SKILL.md) |
+| `scaffold` | 从内置技术底座生成新项目骨架，替代重复选型（当前底座：后端单体应用、前端管理后台） | 用户说"新建项目""起一个后端""起一个管理后台""搭个骨架""初始化工程"，或要求创建后端服务 / 前端后台但未指定技术栈 | [`scaffold/`](scaffold/SKILL.md) |
 
 ## firecrawl
 
@@ -86,17 +86,17 @@ skill 之间除显式声明外互不依赖，可单独复制到任意仓库使�
 
 当前底座：
 
-| 底座 | 形态 | 可选组件 |
+| 底座 | 形态 | 该底座声明的参数（除项目名外） |
 | --- | --- | --- |
-| `backend-monolith` | 后端单体应用（Spring Boot 4.1 + Java 21 + 六边形分层 + ArchUnit 守护） | 数据能力 `mongodb` / `postgres` / `mysql`；缓存能力 `caffeine` / `redis` |
-
+| `backend-monolith` | 后端单体应用（Spring Boot 4.1 + Java 21 + 六边形分层 + ArchUnit 守护） | 基础包名（必填）；数据能力 `mongodb` / `postgres` / `mysql`；缓存能力 `caffeine` / `redis` |
+| `frontend-admin` | 前端管理后台（Ant Design Pro v6 + Umi Max 4 + React 19 + antd 6） | 站点标题（默认由项目名推导）；开发期后端代理目标（默认 `http://localhost:8080`） |
 流程要点：
 
-1. 只问四件事：项目名、包名、数据能力、缓存能力；后两项缺省取 `mongodb` 与 `caffeine`。
-2. 用 `uv run scripts/scaffold.py --template backend-monolith --name ... --package ... --db ... --cache ... --out ...` 渲染底座与所选组件，并生成 Gradle wrapper。
-3. 生成后必须让 `./gradlew test` 通过，才算完成。
+1. 只问该底座声明的参数：后端是项目名、包名、数据能力、缓存能力（后两项缺省取 `mongodb` 与 `caffeine`）；前端是项目名、站点标题、代理目标（后两项都有默认值）。
+2. 用 `uv run scripts/scaffold.py --template <底座名> ...` 渲染，参数按各底座 `template.py` 的 `PARAMS` 收集。
+3. 生成后必须让对应验收命令通过才算完成：后端 `scripts/qa-gate.sh`（等价 `./gradlew build`），前端 `npm install && scripts/qa-gate.sh`。
 
-硬性约定：禁止重新选型；禁止手工复制模板（会漏掉条件块与占位符替换）；禁止把业务代码写进底座的 `sample` 占位上下文。底座说明与组件行为见 [`references/backend-monolith.md`](scaffold/references/backend-monolith.md)。
+硬性约定：禁止重新选型；禁止手工复制模板（会漏掉条件块与占位符替换）；禁止把业务代码写进底座的 `sample` 占位模块；禁止为了让工具跑起来而降级底座选型（前端底座的 TS 7 × StrykerJS 兼容层已就位）。两个底座的说明、组件行为与已验证范围见 [`references/backend-monolith.md`](scaffold/references/backend-monolith.md) 与 [`references/frontend-admin.md`](scaffold/references/frontend-admin.md)。
 
 ## 使用方式
 
@@ -114,4 +114,4 @@ uv run tools/omf_validate.py --dir docs/model --impact Contract_Submit
 - 一个 skill 一个目录，入口固定为 `SKILL.md`。
 - `SKILL.md` 只保留触发、原则、流程与自检；长清单与模板下沉到 `references/`。
 - 需要执行的脚本放 `scripts/`；Python 脚本用 PEP 723 内联依赖，经 `uv run` 隔离执行，不污染全局环境；一次性工具用 `uvx <tool>`（入口名与包名不一致时用 `uvx --from <包> <入口>`）临时执行，不写进依赖。
-- 项目脚手架类 skill 额外有 `templates/<底座>/`：`base/` 是应用本体，`components/*` 是可组装的能力组件（数据能力、缓存能力）；模板用 `{{变量}}` 占位与 `?if` 条件块，由 `scripts/` 下的生成器渲染。
+- 项目脚手架类 skill 额外有 `templates/<底座>/`：`base/` 是应用本体，`components/*` 是可组装的能力组件（如后端的数据库与缓存能力），`template.py` 声明该底座的参数、后置步骤与下一步提示；通用渲染引擎是 `scripts/scaffold.py`。模板用 `{{变量}}` 占位与 `?if` 条件块。

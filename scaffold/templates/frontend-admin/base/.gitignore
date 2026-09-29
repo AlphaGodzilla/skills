@@ -1,0 +1,31 @@
+# dependencies
+**/node_modules
+
+# production
+/dist
+
+# umi 自动生成的临时目录
+.umi
+.umi-production
+.umi-test
+.umi-undefined
+.turbopack
+
+# 测试与门禁产物
+/coverage
+/reports
+/.stryker-tmp
+
+# 本机覆盖项：.env.example 入库，.env 不入库
+.env
+
+# 代码索引
+.codegraph
+
+# misc
+.DS_Store
+*.log
+.idea
+.vscode
+.history
+screenshot
