@@ -111,4 +111,4 @@ scripts/mutation-gate.sh --incremental        # 复用上次结果（快，但�
 
 ## 在 git worktree 里跑命令
 
-在 worktree 里 `git status` 报 `not a git repository` / 沙箱拒绝写 `.git` 时，是沙箱只放行了会话目录导致的。`.pi/sandbox.json` 已把主仓库的 `.git` 放行（写成相对路径 `../order-admin/.git`）：**主仓库目录名要与项目名一致、worktree 建在兄弟目录**（`git worktree add ../order-admin-<分支>`）。把 worktree 放进 `<仓库>/.worktree/<名字>` 时该条目不匹配，需要另加 `../../.git`。这个文件必须随首次提交入库——未跟踪文件不会被 `git worktree add` 带过去。
+在 worktree 里 `git status` 报 `not a git repository` / 沙箱拒绝写 `.git` 时，是沙箱只放行了会话目录导致的。`.pi/sandbox.json` 已把主仓库的 `.git` 放行（写成相对路径 `../{{project_name}}/.git`）：**主仓库目录名要与项目名一致、worktree 建在兄弟目录**（`git worktree add ../{{project_name}}-<分支>`）。把 worktree 放进 `<仓库>/.worktree/<名字>` 时该条目不匹配，需要另加 `../../.git`。这个文件必须随首次提交入库——未跟踪文件不会被 `git worktree add` 带过去。

@@ -4,7 +4,7 @@
  *   目标地址可用环境变量覆盖（见 .env.example）：`API_TARGET=http://x npm run dev`。
  * @doc https://umijs.org/docs/guides/proxy
  */
-const DEFAULT_TARGET = 'http://localhost:8080';
+const DEFAULT_TARGET = '{{api_target}}';
 
 export default {
   dev: {

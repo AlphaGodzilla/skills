@@ -1,6 +1,6 @@
-# order-admin
+# {{project_name}}
 
-Order Admin —— 基于 Ant Design Pro v6 的前端管理后台。本仓库由脚手架 `frontend-admin` 底座生成，自带分层骨架、质量门禁与给 agent 的渐进式指令。
+{{title}} —— 基于 Ant Design Pro v6 的前端管理后台。本仓库由脚手架 `frontend-admin` 底座生成，自带分层骨架、质量门禁与给 agent 的渐进式指令。
 
 - **定位**：后台管理界面（列表、详情、表单、工作台）。面向运营与内部使用，不做面向公网的营销页。
 - **不含业务**：唯一的业务形状是 `sample` 模块（分层样例），落地时整体删除。
@@ -134,7 +134,7 @@ public/scripts/loading.js  首屏占位脚本（构建时进 HTML）
 
 | 配置 | 位置 | 说明 |
 | --- | --- | --- |
-| 后端代理目标 | 环境变量 `API_TARGET` 或 `.env`（见 `.env.example`） | 默认 `http://localhost:8080`；只在 `npm start` / `npm run dev` 生效 |
+| 后端代理目标 | 环境变量 `API_TARGET` 或 `.env`（见 `.env.example`） | 默认 `{{api_target}}`；只在 `npm start` / `npm run dev` 生效 |
 | 站点标题 | `config/defaultSettings.ts` 与 `config/config.ts` 的 `title` | 浏览器标题、布局标题、菜单标题 |
 | 主色与主题 | `config/defaultSettings.ts` 的 `token` / `navTheme` | ProLayout 支持的主题项都在这里 |
 | 路由与菜单 | `config/routes.ts` | `hideInMenu` 控制是否出现在侧栏 |

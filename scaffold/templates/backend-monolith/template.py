@@ -46,7 +46,26 @@ OPTIONS: list[dict[str, Any]] = [
     {"name": "gradle_version", "default": "8.14.3", "help": "生成的 wrapper 版本"},
     {"name": "skip_wrapper", "action": "store_true", "help": "不生成 Gradle wrapper"},
     {"name": "skip_codegraph", "action": "store_true", "help": "不执行 codegraph init"},
+
 ]
+
+# 模板里必须出现的占位符 → 至少出现在多少个模板文件里（文件名与文件内容都算）。
+# 引擎在渲染前检查，防止「把渲染结果同步回模板」把占位符覆盖成真实值；
+# 有意删掉某处占位符时，同步下调这里的数字。
+PLACEHOLDERS = {
+    "package": 43,
+    "package_path": 43,
+    "project_name": 7,
+    "db_name": 4,
+    "db_user": 4,
+    "app_class": 3,
+    "db_password": 3,
+    "db": 2,
+    "cache": 2,
+    "db_port": 2,
+    "jdbc_url": 2,
+    "jdbc_driver": 1,
+}
 
 # 组件目录名相对模板根目录。底座是唯一的应用模板，数据库与缓存是它的两个可选能力组件；
 # postgres 与 mysql 共用 data-jpa 组件，靠变量与条件块区分。

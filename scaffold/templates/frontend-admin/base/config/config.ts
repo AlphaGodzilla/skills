@@ -66,7 +66,7 @@ export default defineConfig({
    * @name layout 插件
    * @doc https://umijs.org/docs/max/layout-menu
    */
-  title: 'Order Admin',
+  title: '{{title}}',
   layout: {
     locale: true,
     ...defaultSettings,

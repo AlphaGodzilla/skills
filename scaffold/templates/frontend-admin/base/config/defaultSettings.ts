@@ -14,7 +14,7 @@ const Settings: ProLayoutProps = {
   fixedHeader: false,
   fixSiderbar: true,
   colorWeak: false,
-  title: 'Order Admin',
+  title: '{{title}}',
   iconfontUrl: '',
   // 暂无自有 logo：显式置 false，避免落到 ProLayout 注入的上游 Ant Design 图标
   logo: false,

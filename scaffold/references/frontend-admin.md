@@ -65,8 +65,9 @@
 `--title` 的推导规则：按 `-`/`_`/`.` 切分后逐段首字母大写，`ui` / `api` / `id` / `url` / `crm` / `erp` / `wms` / `bpm` 全大写（`admin-web` → `Admin Web`，`crm-api` → `CRM API`）。
 
 可用占位符：`{{project_name}}`、`{{title}}`、`{{api_target}}`。模板里 `{{title}}` 出现在 `config/config.ts`、`config/defaultSettings.ts`、`package.json` 的描述与 `README.md`；`{{api_target}}` 出现在 `config/proxy.ts`。
+渲染后由生成器自检：占位符残留、YAML / TOML / **JSON** 可解析、以及「块注释里提前出现的 `*/`」（模板注释里若写出形如 `src/locales/<星号>/menu.ts` 的路径片段，就会把块注释提前闭合，剩下半个路径变成代码——这类笔误只在生成后才会炸，所以放在自检里拦）。
 
-渲染后由生成器自检：占位符残留、YAML / TOML / **JSON** 可解析、以及「块注释里提前闭合的 `*/`」（这类模板笔误只在生成后才会炸，例如文档里写 `src/locales/*/menu.ts` 会把注释提前结束）。
+**渲染前**还有一项占位符完整性检查：`template.py` 的 `PLACEHOLDERS` 声明「每个占位符至少出现在多少个模板文件里」（前端底座是 `project_name: 5`、`title: 4`、`api_target: 3`），引擎按整棵模板树（含未选中的能力组件）统计，不达标即拒绝生成。它专门拦一类事故：把「渲染后的结果」反向同步回模板目录、占位符被真实值覆盖——那种模板渲染照样能跑，却会把上一个项目的名字与标题带进下一个项目，而且要等到别人生成时才暴露。覆盖任意一处（哪怕只在一个文件里）都会被查出来。
 
 ## 三、分层与依赖规则
 
@@ -282,6 +283,7 @@ Stryker 开源版的 `incremental` 是**跨次累加**的：上一次范围外�
 - **CRAP**：注入一个圈复杂度 9、零覆盖的函数后报 `1 个函数超过 crapMax=30`（该函数 CRAP 90.0），退出码 1。
 - **格式 ratchet**：干净树跳过；改动一个文件 + 新增一个未跟踪文件时，`changed-files.mjs` 精确列出这两个文件，`format-gate.mjs` 报出两处违规。
 - **antd 用法检查**：`npx antd lint ./src` 干净时 0.3 秒；注入一处 deprecated 用法（antd 6 里 `<Alert message="..." />`，已改名 `title`）后，**原生命令退出码仍是 0**，而 `npm run antd:lint` 报出 `file:line [deprecated] Alert \`message\` is deprecated...` 并退出 1——这正是把它包一层的原因。
+- **占位符完整性守卫**：正例是 6 个后端组合 + 前端全部生成成功；反例三处都实测拦下——抹掉前端 3 处 `{{title}}` 中的 1 处、抹掉后端**未选中组件**里的 `{{db_name}}`、以及把渲染结果同步回模板（真实踩到过：反向 rsync 让 7 个文件里的占位符全被覆盖成上一个项目的名字，当时没有守卫，是靠人工比对才发现）。
 - **变异测试**：范围内全量 152 个变异体、killed 152、得分 100%、23 秒；单文件（`src/utils/format.ts`）52 个变异体、100%、约 14 秒。
 - **陈旧报告防护**：把 `stryker.config.json` 改坏后跑门禁，脚本报「未产出报告」并贴出日志尾部，而不是读到上一次的报告误判通过。
 

@@ -20,6 +20,8 @@
 也可直接用系统 Python 运行：PyYAML 缺失时跳过 YAML 自检，其余功能不受影响。
 
 每个底座在 `templates/<底座名>/template.py` 里声明自己的参数、能力组件、渲染后步骤与下一步提示，
+每个底座在 `templates/<底座名>/template.py` 里声明自己的参数、能力组件、后置步骤、下一步提示，
+以及**必须出现在模板里的占位符清单 `PLACEHOLDERS`**（渲染前先查，防止模板被上一次的渲染结果覆盖）。
 本脚本只做通用工作：条件块求值、占位符替换、产物自检、渲染后处理。
 
 模板约定见 ../references/*.md 与 SKILL.md。
@@ -154,6 +156,77 @@ class Helpers:
     @staticmethod
     def warn(message: str) -> None:
         print(message)
+
+
+def template_overlay_dirs(template_root: Path) -> list[Path]:
+    """模板目录下所有可能参与渲染的目录（`base` 与全部能力组件）。
+
+    占位符检查针对**整棵模板树**而不是本次选中的组合：模板污染是模板本身的问题，
+    与这次选了哪个数据/缓存能力无关。
+    """
+    return [
+        directory
+        for directory in sorted(template_root.iterdir())
+        if directory.is_dir() and directory.name not in IGNORED_DIRECTORIES
+    ]
+
+
+def count_placeholder_files(overlay_dirs: list[Path], names: set[str]) -> dict[str, int]:
+    """统计每个占位符出现在多少个模板文件里（文件名与文件内容都算）。"""
+    counts = dict.fromkeys(names, 0)
+    for directory in overlay_dirs:
+        for source in directory.rglob("*"):
+            if source.is_dir():
+                continue
+            relative = source.relative_to(directory)
+            if any(part in IGNORED_DIRECTORIES for part in relative.parts[:-1]):
+                continue
+
+            found: set[str] = set()
+            for part in relative.parts:  # 占位符也可能用在目录名/文件名里（后端的 {{package_path}}）
+                found.update(PLACEHOLDER.findall(part))
+            try:
+                found.update(PLACEHOLDER.findall(source.read_text(encoding="utf-8")))
+            except (UnicodeDecodeError, OSError):
+                pass
+
+            for name in found:
+                if name in counts:
+                    counts[name] += 1
+    return counts
+
+
+def require_placeholders(template: ModuleType, overlay_dirs: list[Path]) -> None:
+    """检查底座声明的占位符还在模板里，且覆盖的文件数不低于声明值。
+
+    这条检查专门拦一类事故：把「渲染后的结果」反向同步回模板目录，占位符被真实值覆盖。
+    覆盖之后渲染照样能跑（只是再没有占位符），生成物会带着上一个项目的名字与标题，
+    而且要等到下一个人生成时才暴露。声明 PLACEHOLDERS 后，这种污染在生成时立刻报错。
+    """
+    declared = dict(getattr(template, "PLACEHOLDERS", {}) or {})
+    if not declared:
+        raise SystemExit("底座没有声明 PLACEHOLDERS（占位符 → 至少出现在多少个模板文件里）")
+
+    counts = count_placeholder_files(overlay_dirs, set(declared))
+    short = {
+        name: (counts[name], minimum)
+        for name, minimum in declared.items()
+        if counts[name] < minimum
+    }
+    if not short:
+        return
+
+    details = "\n".join(
+        f"    {{{{{name}}}}}：模板里只在 {found} 个文件里出现，声明要求至少 {minimum} 个"
+        for name, (found, minimum) in short.items()
+    )
+    raise SystemExit(
+        "模板的占位符不完整：\n"
+        f"{details}\n"
+        "  八成是模板被「渲染结果」覆盖过（占位符被替换成了真实值）。\n"
+        "  修法：把模板里对应位置改回占位符，再用**不同的参数**渲染一次验证；\n"
+        "        若确实是有意删掉某处占位符，同步下调 template.py 里 PLACEHOLDERS 的数字。"
+    )
 
 
 def load_template(name: str) -> tuple[Path, ModuleType]:
@@ -393,12 +466,17 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"目标目录已存在：{target}（加 --force 清空重建）")
         shutil.rmtree(target)
 
-    variables = template.variables(options)
-    written: set[Path] = set()
-    for overlay in ["base", *template.overlays(options)]:
-        directory = template_root / overlay
+    overlay_dirs = [template_root / name for name in ["base", *template.overlays(options)]]
+    for directory in overlay_dirs:
         if not directory.is_dir():
             raise SystemExit(f"模板缺少目录：{directory}")
+    # 先查占位符再落盘：模板被渲染结果污染时要立刻失败，而不是产出一个带旧名字的项目。
+    # 检查覆盖整棵模板树（含未选中的能力组件），因此数字与本次组合无关。
+    require_placeholders(template, template_overlay_dirs(template_root))
+
+    variables = template.variables(options)
+    written: set[Path] = set()
+    for directory in overlay_dirs:
         copy_overlay(directory, target, variables, written)
 
     print(f"已生成 {target}（{len(written)} 个文件）：{template.summary(options)}")

@@ -1,8 +1,8 @@
 {
-  "name": "order-admin",
+  "name": "{{project_name}}",
   "version": "0.1.0",
   "private": true,
-  "description": "Order Admin —— Ant Design Pro v6 管理后台",
+  "description": "{{title}} —— Ant Design Pro v6 管理后台",
   "scripts": {
     "analyze": "cross-env ANALYZE=1 max build",
     "build": "max build",

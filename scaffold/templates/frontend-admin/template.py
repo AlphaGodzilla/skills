@@ -26,6 +26,15 @@ OPTIONS: list[dict[str, Any]] = [
     {"name": "skip_codegraph", "action": "store_true", "help": "不执行 codegraph init"},
 ]
 
+# 模板里必须出现的占位符 → 至少出现在多少个模板文件里（文件名与文件内容都算）。
+# 引擎在渲染前检查，防止「把渲染结果同步回模板」把占位符覆盖成真实值；
+# 有意删掉某处占位符时，同步下调这里的数字。
+PLACEHOLDERS = {
+    "project_name": 5,
+    "title": 4,
+    "api_target": 3,
+}
+
 # 项目名 → 标题时保留的词形：`admin-web` → `Admin Web`、`crm-api` → `CRM API`
 _UPPERCASE = {"ui", "api", "id", "url", "crm", "erp", "wms", "bpm"}
 

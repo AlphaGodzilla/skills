@@ -5,7 +5,7 @@
 
 ## 仓库
 
-order-admin：Ant Design Pro v6（Umi Max 4 + React 19 + antd 6 + ProComponents 3）的前端管理后台，TypeScript 严格模式，Biome 管格式与静态检查，Vitest 管测试。开发期 `/api/**` 默认代理到 `http://localhost:8080`。
+{{project_name}}：Ant Design Pro v6（Umi Max 4 + React 19 + antd 6 + ProComponents 3）的前端管理后台，TypeScript 严格模式，Biome 管格式与静态检查，Vitest 管测试。开发期 `/api/**` 默认代理到 `{{api_target}}`。
 
 底座不含业务：唯一带业务形状的模块是 `sample`（分层样例：列表页 + 详情页 + 服务层 + 纯逻辑模块 + 契约测试），落地时整体删除。
 

@@ -1,5 +1,5 @@
 {
   "filesystem": {
-    "allowWrite": ["../order-admin/.git"]
+    "allowWrite": ["../{{project_name}}/.git"]
   }
 }
