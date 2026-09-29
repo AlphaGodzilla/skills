@@ -23,7 +23,7 @@ You have access to `@ant-design/cli` — a local CLI tool with bundled antd meta
 本 skill 来自 [ant-design/ant-design-pro](https://github.com/ant-design/ant-design-pro) 自带技能，正文与上游保持一致以便日后对齐；以下是本仓库的落地差异：
 
 - CLI 是 devDependency（`@ant-design/cli`），用 `npx antd ...` 调用，**离线可用**。
-- `npx antd lint` **发现违规也返回 0**（实测），所以本仓库把它包成了 `npm run antd:lint`：解析 JSON 报告、有违规即非 0 退出，并已纳入 `scripts/qa-gate.sh` 的第 5 道门禁「antd 用法检查」。写或改完 antd 代码后跑 `npm run antd:lint`，不要只看原生命令的退出码。
+- `npx antd lint` **发现违规也返回 0**（实测），所以本仓库把它包成了 `npm run antd:lint`：解析 JSON 报告、有违规即非 0 退出，并已纳入 `scripts/qa-gate.sh` 的第 3 道门禁「antd 用法检查」。写或改完 antd 代码后跑 `npm run antd:lint`，不要只看原生命令的退出码。
 - 本项目用 **antd 6**；`antd info` / `antd lint` 会自动读 `node_modules` 判定版本，跨版本查询用 `--version`。
 
 ## Setup

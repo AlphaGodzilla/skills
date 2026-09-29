@@ -15,9 +15,10 @@
 #   · 存活变异体数 ≤ mutation.survivorsMax（默认 0：一个都不许活）
 #   · 变异得分 ≥ mutation.scoreMin（默认 0：不按分数判定）
 #   · mutation.failOnNoCoverage=true（默认）时，零覆盖变异体也判失败
+#   · 本次范围内一个变异体都没产生（路径写错、或该文件被 mutate 排除）→ 也判失败，避免「什么都没测却亮绿灯」
 #
 # 与其它脚本的分工：
-#   qa-gate.sh     提交前验收（格式 / 类型 / 测试与覆盖率 / CRAP），不跑变异测试
+#   qa-gate.sh     提交前验收（格式 / 类型 / antd 用法 / 测试与覆盖率 / CRAP），不跑变异测试
 #   本脚本         可选的变异测试门禁，慢；建议放在夜间或改动核心逻辑时手动跑
 #
 # 报告：reports/mutation/index.html（人读）、reports/mutation/mutation.json（agent 解析）
@@ -82,6 +83,37 @@ if [[ ${ALLOW_NO_COVERAGE} -eq 1 ]]; then FAIL_ON_NO_COVERAGE="false"; fi
 # 只变异业务源码：测试文件与类型声明不参与（stryker.config.json 的 mutate 也是同一口径）。
 SOURCE_FILTER='^src/.*\.(ts|tsx)$'
 
+# 把 --file 的取值整理成 Stryker 的 --mutate 口径：
+#   · 目录要展开成 glob（Stryker 不认裸目录，会「找不到文件」并提前退出）；
+#   · 路径必须存在，写错时立刻报错，而不是让 Stryker 抛一句与范围无关的「No tests were executed」。
+normalize_scope() {
+    local entry expanded=() missing=()
+    for entry in "$@"; do
+        if [[ -d "${entry}" ]]; then
+            # 注意：Stryker 的 --mutate 是逗号分隔的，`{ts,tsx}` 会被逗号切成两半，
+            # 因此目录要展开成两个独立条目，不能用花括号 glob。
+            # 注意：`--mutate` 会**整体替换** stryker.config.json 的 mutate 清单，所以配置里的排除项
+            # （测试文件、类型声明、呈现层）在这里必须自己带上，否则会把测试文件也变异一遍。
+            expanded+=(
+                "${entry}/**/*.ts"
+                "${entry}/**/*.tsx"
+                "!${entry}/**/*.test.ts"
+                "!${entry}/**/*.test.tsx"
+                "!${entry}/**/*.d.ts"
+            )
+        elif [[ -f "${entry}" ]]; then
+            expanded+=("${entry}")
+        else
+            missing+=("${entry}")
+        fi
+    done
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "✗ 范围里有不存在的路径：${missing[*]}" >&2
+        return 1
+    fi
+    printf '%s' "$(printf '%s\n' ${expanded[@]+"${expanded[@]}"} | paste -sd, -)"
+}
+
 changed_sources() {
     node scripts/changed-files.mjs "$@" --filter "${SOURCE_FILTER}" 2>/dev/null |
         grep -v -E '\.(test|spec)\.(ts|tsx)$' |
@@ -95,8 +127,8 @@ case "${MODE}" in
         TARGET_DESC="stryker.config.json 的全部目标（全量）"
         ;;
     file)
-        TARGETS="$(printf '%s\n' ${FILES[@]+"${FILES[@]}"} | paste -sd, -)"
-        TARGET_DESC="指定文件：${TARGETS}"
+        if ! TARGETS="$(normalize_scope ${FILES[@]+"${FILES[@]}"})"; then exit 2; fi
+        TARGET_DESC="指定路径：${TARGETS}"
         ;;
     changed)
         BASE="$(node scripts/changed-files.mjs --print-base)"
@@ -160,6 +192,9 @@ set -e
 if [[ ! -f "${JSON}" ]]; then
     echo
     echo "✗ 变异测试未产出报告（stryker 退出码 ${stryker_status}）"
+    echo "  常见原因（Stryker 自己的报错常常指向别处）："
+    echo "    · 范围路径没匹配到文件：目录要写成 glob（本脚本已自动展开），文件要写成相对仓库根的路径；"
+    echo "    · 该文件落在 stryker.config.json 的 mutate 排除项里（呈现层刻意不纳入变异，见 docs/scaffold/development.md）。"
     echo "  日志尾部（完整日志：${LOG}）："
     tail -n 25 "${LOG}" | sed 's/^/  /'
     exit 1
@@ -167,17 +202,30 @@ fi
 
 # ── 解析 mutation.json ────────────────────────────────────────
 # 用 node 解析而不是 jq：这是一个 Node 项目，node 必然在场，jq 不保证。
-# 用 node 解析而不是 jq：这是一个 Node 项目，node 必然在场，jq 不保证。
 # 第二个参数是本次范围内的文件清单（逗号分隔）：增量报告里可能带着上一次的范围外结果，
+# 只把「具体文件路径」交给过滤器比对；范围里带通配符（目录展开成的 glob）时无法逐条比对，
+# 就不过滤——报告在每次运行前都会被删掉，不存在读到陈旧结果的可能。
+SCOPE_FILTER="${TARGETS}"
+case "${TARGETS}" in
+    *'*'*|*'?'*|*'['*|*'{'*) SCOPE_FILTER="" ;;
+esac
 # 判据只认范围内的，否则「改了 3 个文件」却按全量裁决定生死。
 node -e '
     const fs = require("node:fs");
     const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const scope = (process.argv[2] ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+    // 范围条目要做路径规范化再比对：`./src/utils/format.ts` 与报告里的 `src/utils/format.ts` 必须算同一个，
+    // 否则「指定了某个文件、却匹配不到任何变异体」会被当成 100% 通过（假通过）。
+    const normalize = (value) => value.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
+    const scope = (process.argv[2] ?? "").split(",").map(normalize).filter(Boolean);
+    const inScope = (file) => {
+        const normalized = normalize(file);
+        // 允许给目录（如 src/utils），因此既比全等也比前缀
+        return scope.some((entry) => normalized === entry || normalized.startsWith(`${entry}/`));
+    };
     const rows = [];
     let skipped = 0;
     for (const [file, entry] of Object.entries(report.files ?? {})) {
-        if (scope.length > 0 && !scope.includes(file)) {
+        if (scope.length > 0 && !inScope(file)) {
             skipped += (entry.mutants ?? []).length;
             continue;
         }
@@ -196,10 +244,23 @@ node -e '
     if (skipped > 0) {
         process.stderr.write(`  · 已忽略 ${skipped} 个不在本次范围内的历史结果（增量报告是累加的）\n`);
     }
-' "${JSON}" "${TARGETS}" > "${TSV}"
+' "${JSON}" "${SCOPE_FILTER}" > "${TSV}"
 
 total="$(wc -l < "${TSV}" | tr -d ' ')"
 count_status() { awk -F'\t' -v s="$1" '$1 == s' "${TSV}" | wc -l | tr -d ' '; }
+
+# 范围内一个变异体都没有时**判失败**，而不是「0 个变异体 / 100% 通过」：
+# 那通常是范围写错了（路径不对，或该文件被 stryker.config.json 的 mutate 排除），
+# 静默通过会让门禁在「其实什么都没测」的情况下亮绿灯。
+if [[ "${total}" -eq 0 ]]; then
+    echo
+    echo "✗ 本次范围内没有产生任何变异体（${TARGET_DESC}）"
+    echo "  · 范围条目：${TARGETS:-<stryker.config.json 的 mutate 清单>}"
+    echo "  · 常见原因：路径写错；或该文件落在 mutate 排除项里（src/locales/**、src/pages/**/index.tsx、"
+    echo "    src/components/** 等呈现层刻意不纳入变异，见 docs/scaffold/development.md）。"
+    echo "  · 完整日志：${LOG}"
+    exit 1
+fi
 killed="$(count_status Killed)"
 timed_out="$(count_status Timeout)"
 survived="$(count_status Survived)"

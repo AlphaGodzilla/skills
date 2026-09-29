@@ -12,7 +12,7 @@
 ## 硬约束
 
 1. **分层**：`utils` 与 `locales` 不得依赖任何上层；`services` 不得依赖视图层；`components` 不得依赖 `pages`；跨层引用必须用 `@/` 别名而不是相对路径。由 [`tests/architecture.test.ts`](tests/architecture.test.ts) 守护，违反会让 `scripts/qa-gate.sh` 失败。
-2. **文案只走 i18n**：组件里用 `useIntl().formatMessage({ id, defaultMessage })`，不要 `import` `src/locales/`；新增文案要同时补 `zh-CN` 与 `en-US`。
+2. **文案只走 i18n**：组件里用 `useIntl().formatMessage({ id, defaultMessage })`，不要 `import` `src/locales/`；**每个 `formatMessage` 都要带 `id`**（真实 react-intl 缺 `id` 会抛错，测试里的 mock 也照此抛错）；新增文案要同时补 `zh-CN` 与 `en-US`。
 3. **路由即菜单**：`config/routes.ts` 的 `name` 是 i18n key（`menu.<name>`），新增路由必须同时补三处：`routes.ts`、`src/locales/*/menu.ts`、页面组件。
 4. **页面只做装配**：请求写在 `src/services/`（配契约测试），页面里的纯逻辑抽到同目录的 `*Query.ts` / `*Form.ts` 并单测；不要在页面里手写 `useEffect` 拉数据，列表用 `ProTable` 的 `request`、详情用 `ProDescriptions` 的 `request`。
 5. **不要在 `sample` 上堆业务代码**：新增业务另建模块目录，并按 [`docs/scaffold/structure.md`](docs/scaffold/structure.md) 的分层规则摆放。

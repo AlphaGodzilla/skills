@@ -5,8 +5,19 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@umijs/max', () => ({
   Link: ({ children }: { children?: React.ReactNode }) => children,
   useIntl: () => ({
-    formatMessage: ({ defaultMessage }: { defaultMessage?: string }) =>
+    // 严格 mock：真实 react-intl 在缺 id 时会抛错，这里照做，否则「漏写 id」会被测试放过
+    formatMessage: ({
+      id,
       defaultMessage,
+    }: {
+      id?: string;
+      defaultMessage?: string;
+    }) => {
+      if (!id) {
+        throw new Error('i18n 调用缺少 id：react-intl 在真实运行时会直接抛错');
+      }
+      return defaultMessage;
+    },
   }),
 }));
 

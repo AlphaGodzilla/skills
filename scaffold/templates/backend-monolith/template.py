@@ -5,6 +5,7 @@
     DESCRIPTION  一句话说明，出现在 --help 里
     PARAMS       模板变量参数，对应引擎的 --<名字>；可 required / choices / default / pattern
     OPTIONS      模板专属开关，对应引擎的 --<名字>
+    PLACEHOLDERS {占位符: 至少出现多少次}，渲染前校验（防止模板被渲染结果覆盖）
     variables(options)                     -> dict[str, str]，模板占位符的取值
     overlays(options)                      -> list[str]，base 之外还要叠加的组件目录
     summary(options)                       -> str，生成成功那行的后缀
@@ -49,19 +50,19 @@ OPTIONS: list[dict[str, Any]] = [
 
 ]
 
-# 模板里必须出现的占位符 → 至少出现在多少个模板文件里（文件名与文件内容都算）。
+# 模板里必须出现的占位符 → 至少出现多少次（文件名/目录名与文件内容都算）。
 # 引擎在渲染前检查，防止「把渲染结果同步回模板」把占位符覆盖成真实值；
-# 有意删掉某处占位符时，同步下调这里的数字。
+# 有意增删某处占位符时，同步改这里的数字（报错会给出实测次数）。
 PLACEHOLDERS = {
-    "package": 43,
-    "package_path": 43,
-    "project_name": 7,
+    "package": 121,
+    "package_path": 47,
+    "project_name": 9,
+    "app_class": 5,
     "db_name": 4,
     "db_user": 4,
-    "app_class": 3,
+    "cache": 3,
+    "db": 3,
     "db_password": 3,
-    "db": 2,
-    "cache": 2,
     "db_port": 2,
     "jdbc_url": 2,
     "jdbc_driver": 1,

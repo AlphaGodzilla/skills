@@ -213,7 +213,7 @@ components/cache-redis/      # 缓存能力组件
 uvx --from shellcheck-py shellcheck -S warning -x scripts/*.sh scripts/lib/*.sh
 ```
 
-加新组件：在 `components/` 下新建目录（如 `cache-caffeine` 的形状），在 `scripts/scaffold.py` 的 `DATA_COMPONENTS` / `CACHE_COMPONENTS` 里登记名称与目录。加新底座：在 `templates/` 下新建目录，至少含 `base/`，在 `SKILL.md` 的底座清单里加一行，并写一份对应的 `references/<底座>.md`。
+加新组件：在 `components/` 下新建目录（如 `cache-caffeine` 的形状），在 `templates/backend-monolith/template.py` 的 `DATA_COMPONENTS` / `CACHE_COMPONENTS`（以及 `variables()` 里对应的变量）登记名称与目录。加新底座：在 `templates/` 下新建目录，至少含 `base/` 与声明契约的 `template.py`，在 `SKILL.md` 的底座清单里加一行，并写一份对应的 `references/<底座>.md`。
 
 维护提醒：模板目录里出现 `bin/`、`build/`、`.gradle/`、`.idea/` 时说明有人就地构建过；生成器会跳过这些目录，仓库 `.gitignore` 也已忽略，但应当清理。改命令、脚本行为或数据 / 缓存约定时，同步更新 `README.md` 与 `docs/scaffold/` 下对应的那一篇，`AGENTS.md` 只在硬约束或文档地图变化时动。
 
@@ -247,7 +247,7 @@ uvx --from shellcheck-py shellcheck -S warning -x scripts/*.sh scripts/lib/*.sh
 
 代码格式：六个组合与三种包名（`zz.qq`、46 字符长包名、`io.github.alphagodzilla.someapp`）的 `./gradlew spotlessCheck` 全部通过。ratchet 语义用对照实验确认：提交时已存在的不合规文件既不被检查也不被改写，提交后修改的文件与新增未跟踪文件都被检查并改写；`git init` 但尚无提交时不再报 `No such reference 'HEAD'`。
 
-覆盖率与 CRAP 门禁：六个组合实跑 `./gradlew build` 全部通过，实测行覆盖 70.6%（`mongodb`）~ 72.5%（`postgres` / `mysql`）、分支覆盖 74.1%，89 个方法里最高 CRAP 6.1；删除 `sample` 占位上下文后骨架自身行覆盖 87.5%。门禁的拦截能力用反例确认：注入一个圈复杂度 9、零覆盖的方法后 `crapCheck` 报 `CRAP 门禁未通过：1 个方法超过 crapMax=30`（该方法 90.0 分），`-PcoverageLineMin=0.95` 时 `jacocoTestCoverageVerification` 报 `lines covered ratio is 0.72, but expected minimum is 0.95`。合并两层覆盖率另在 `mongodb` + `redis` 上用 `scripts/dev-it.sh build` 实测：行覆盖 70.6% → 92.2%、分支覆盖 74.1% → 79.6%，跑完容器 0 残留。
+覆盖率与 CRAP 门禁：六个组合实跑 `./gradlew build` 全部通过，实测行覆盖 70.6%（`mongodb`）~ 72.5%（`postgres` / `mysql`）、分支覆盖 74.1%，89~90 个方法里最高 CRAP 6.1（`mongodb` 两组多一个方法）；删除 `sample` 占位上下文后骨架自身行覆盖 87.5%。门禁的拦截能力用反例确认：注入一个圈复杂度 9、零覆盖的方法后 `crapCheck` 报 `CRAP 门禁未通过：1 个方法超过 crapMax=30`（该方法 90.0 分），`-PcoverageLineMin=0.95` 时 `jacocoTestCoverageVerification` 报 `lines covered ratio is 0.72, but expected minimum is 0.95`。合并两层覆盖率另在 `mongodb` + `redis` 上用 `scripts/dev-it.sh build` 实测：行覆盖 70.6% → 92.2%、分支覆盖 74.1% → 79.6%，跑完容器 0 残留。
 
 `scripts/qa-gate.sh` 在六个组合上实跑通过（成功路径打印测试类/用例数、覆盖率与最高 CRAP）。它的失败引导按场景逐个实测：编译错误（列出 `文件:行: 错误` 并去重）、测试失败（类 + 用例 + 反转义后的断言消息，每类最多 5 条）、架构违规（额外指向 `docs/scaffold/structure.md` 的分层规则）、Spotless 违规（列出违规文件）、覆盖率不足（`Rule violated` 原文 + 未覆盖行最多的 5 个类及其源码路径）、CRAP 越界（方法 + 源码路径）；**覆盖率门禁先失败导致 `crap.txt` 未生成时，脚本会补跑一次 `crapReport` 以拿到 CRAP 明细**（该路径单独实测）。脚本经 `bash -n` 与 `shellcheck -S warning -x` 检查无告警，渲染后与模板逐字节一致。
 

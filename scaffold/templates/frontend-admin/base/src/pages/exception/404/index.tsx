@@ -14,6 +14,7 @@ const NotFound: React.FC = () => {
         defaultMessage: '404',
       })}
       subTitle={intl.formatMessage({
+        id: 'page.404.description',
         defaultMessage: '这个地址不存在，可能是链接过期或输入有误。',
       })}
       extra={

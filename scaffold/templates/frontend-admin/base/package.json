@@ -22,7 +22,7 @@
     "format:check": "node scripts/format-gate.mjs",
     "crap": "node scripts/crap-report.mjs",
     "verify": "npm run format:check && npm run tsc && npm run antd:lint && npm run test:coverage && npm run crap",
-    "mutation": "node --import ./scripts/stryker-ts5-register.mjs ./node_modules/@stryker-mutator/core/bin/stryker.js run"
+    "mutation": "node --import ./scripts/stryker-ts-compat-register.mjs ./node_modules/@stryker-mutator/core/bin/stryker.js run"
   },
   "browserslist": [
     "defaults"
@@ -54,7 +54,7 @@
     "happy-dom": "^20.11.2",
     "tailwindcss": "^4.3.2",
     "typescript": "^7.0.2",
-    "typescript-classic": "npm:typescript@5.9.3",
+    "typescript-classic": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "4.1.10"
   },
   "overrides": {

@@ -6,7 +6,7 @@
 
 ## 一、组成
 
-`base/` 下 74 个文件，按目录分组：
+`base/` 下 77 个文件，按目录分组：
 
 | 路径 | 职责 |
 | --- | --- |
@@ -67,7 +67,7 @@
 可用占位符：`{{project_name}}`、`{{title}}`、`{{api_target}}`。模板里 `{{title}}` 出现在 `config/config.ts`、`config/defaultSettings.ts`、`package.json` 的描述与 `README.md`；`{{api_target}}` 出现在 `config/proxy.ts`。
 渲染后由生成器自检：占位符残留、YAML / TOML / **JSON** 可解析、以及「块注释里提前出现的 `*/`」（模板注释里若写出形如 `src/locales/<星号>/menu.ts` 的路径片段，就会把块注释提前闭合，剩下半个路径变成代码——这类笔误只在生成后才会炸，所以放在自检里拦）。
 
-**渲染前**还有一项占位符完整性检查：`template.py` 的 `PLACEHOLDERS` 声明「每个占位符至少出现在多少个模板文件里」（前端底座是 `project_name: 5`、`title: 4`、`api_target: 3`），引擎按整棵模板树（含未选中的能力组件）统计，不达标即拒绝生成。它专门拦一类事故：把「渲染后的结果」反向同步回模板目录、占位符被真实值覆盖——那种模板渲染照样能跑，却会把上一个项目的名字与标题带进下一个项目，而且要等到别人生成时才暴露。覆盖任意一处（哪怕只在一个文件里）都会被查出来。
+**渲染前**还有一项占位符完整性检查：`template.py` 的 `PLACEHOLDERS` 声明「每个占位符至少出现多少次」（前端底座是 `project_name: 6`、`title: 4`、`api_target: 3`；按**出现次数**而不是文件数，因此某个文件里只被改掉一处也能查出），引擎按整棵模板树（含未选中的能力组件）统计，不达标即拒绝生成。它专门拦一类事故：把「渲染后的结果」反向同步回模板目录、占位符被真实值覆盖——那种模板渲染照样能跑，却会把上一个项目的名字与标题带进下一个项目，而且要等到别人生成时才暴露。覆盖任意一处——包括「一个文件里有 121 处 `{{package}}`、只被改掉其中 1 处」——都会被查出来（报错会给出实测次数与声明值）。
 
 ## 三、分层与依赖规则
 
@@ -197,6 +197,8 @@ scripts/mutation-gate.sh --max-survivors 3 --min-score 80
 scripts/mutation-gate.sh --incremental            # 复用上次结果（快，但结论可能过时）
 ```
 
+范围写法：`--file` 接受文件或目录（目录自动展开为 `**/*.ts` / `**/*.tsx` 并带上测试与声明的排除条目——`--mutate` 会整体替换配置里的 mutate 清单，所以排除项必须自己带上）；路径带不带 `./` 都行。**范围内一个变异体都没产生即判失败**（路径写错，或文件被 mutate 排除），否则「什么都没测到」会显示成 100% 通过。
+
 判据：存活变异体数 ≤ `mutation.survivorsMax`（默认 0）、得分 ≥ `mutation.scoreMin`（默认 0）、零覆盖变异体为 0。报告：`reports/mutation/index.html`、`reports/mutation/mutation.json`。门禁在启动 Stryker **之前先删掉旧报告**——否则 Stryker 因配置写错而启动失败时，会读到上一次的报告，把「上次通过」当成「这次通过」。
 
 ### TypeScript 7 × StrykerJS：不降级 TS 的兼容方案
@@ -284,7 +286,8 @@ Stryker 开源版的 `incremental` 是**跨次累加**的：上一次范围外�
 - **格式 ratchet**：干净树跳过；改动一个文件 + 新增一个未跟踪文件时，`changed-files.mjs` 精确列出这两个文件，`format-gate.mjs` 报出两处违规。
 - **antd 用法检查**：`npx antd lint ./src` 干净时 0.3 秒；注入一处 deprecated 用法（antd 6 里 `<Alert message="..." />`，已改名 `title`）后，**原生命令退出码仍是 0**，而 `npm run antd:lint` 报出 `file:line [deprecated] Alert \`message\` is deprecated...` 并退出 1——这正是把它包一层的原因。
 - **占位符完整性守卫**：正例是 6 个后端组合 + 前端全部生成成功；反例三处都实测拦下——抹掉前端 3 处 `{{title}}` 中的 1 处、抹掉后端**未选中组件**里的 `{{db_name}}`、以及把渲染结果同步回模板（真实踩到过：反向 rsync 让 7 个文件里的占位符全被覆盖成上一个项目的名字，当时没有守卫，是靠人工比对才发现）。
-- **变异测试**：范围内全量 152 个变异体、killed 152、得分 100%、23 秒；单文件（`src/utils/format.ts`）52 个变异体、100%、约 14 秒。
+- **变异测试**：范围内全量 152 个变异体、killed 152、得分 100%、23 秒；单文件（`src/utils/format.ts`）52 个变异体、100%、约 14 秒；`npm run mutation` 直接跑 Stryker 亦通（52 个、10 秒）。
+- **变异门禁的假通过/假失败都反例实测过**：`--file ./src/utils/format.ts`（`./` 前缀）、`--file src/utils`（目录）都要能正常比中 52 个；`--file src/locales/zh-CN.ts`（落在 mutate 排除项里）与 `--file src/nope.ts`（路径不存在）必须**明确失败**并指出原因，不能报「0 个变异体 / 100% 通过」。
 - **陈旧报告防护**：把 `stryker.config.json` 改坏后跑门禁，脚本报「未产出报告」并贴出日志尾部，而不是读到上一次的报告误判通过。
 
 变异测试真的抓到了样例代码里的缺口，并按「补断言或简化代码」修掉：

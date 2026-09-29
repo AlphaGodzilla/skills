@@ -15,9 +15,11 @@ vi.mock('@umijs/max', () => ({
       id?: string;
       defaultMessage?: string;
     }) => {
-      if (id) {
-        intlKeys.used.push(id);
+      if (!id) {
+        // 真实 react-intl 缺 id 时会抛错，mock 里照做，否则「漏写 id」会被测试放过
+        throw new Error('i18n 调用缺少 id：react-intl 在真实运行时会直接抛错');
       }
+      intlKeys.used.push(id);
       return defaultMessage;
     },
   }),

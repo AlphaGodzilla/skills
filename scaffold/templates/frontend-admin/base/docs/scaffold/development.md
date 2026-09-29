@@ -37,7 +37,7 @@ scripts/mutation-gate.sh   # 变异测试门禁（可选，慢；默认只变异
 
 1. **页面只做装配，逻辑抽出来测**。页面的 `index.tsx` 负责拼列定义与传 `request`；分页归一化、表单转换、字段映射这类判断放在同目录的纯逻辑模块里，用单元测试覆盖边界。
 2. **服务层测试断言请求形状**。这一层最容易写错的是路径、方法、参数位置，而页面测试看不出这类错误（页面只看返回值）。
-3. **测试不依赖真实后端**：页面与组件测试 mock `@umijs/max`（`Link` / `useIntl` / `useParams` / `history`）与 `@/services/*`。断言 i18n 时优先断言 **key**（mock 里记录 `id`），因为同一条文案在 mock 下都取 `defaultMessage`。
+3. **测试不依赖真实后端**：页面与组件测试 mock `@umijs/max`（`Link` / `useIntl` / `useParams` / `history`）与 `@/services/*`。断言 i18n 时优先断言 **key**（mock 里记录 `id`），因为同一条文案在 mock 下都取 `defaultMessage`。**mock 要像真实 react-intl 一样对待缺 `id` 的调用：直接抛错**——`formatMessage` 少了 `id` 在浏览器里会抛异常，而只取 `defaultMessage` 的宽松 mock 会把这种漏写一路放过（本仓库的测试都用了严格 mock，见 `src/pages/exception/404/index.test.tsx`）。
 
 ## 五道门禁
 
@@ -87,6 +87,8 @@ scripts/mutation-gate.sh --file src/utils/format.ts   # 单个文件
 scripts/mutation-gate.sh --max-survivors 3 --min-score 80   # 覆盖阈值
 scripts/mutation-gate.sh --incremental        # 复用上次结果（快，但结论可能过时，只用于本地迭代）
 ```
+
+范围写法：`--file` 既接受文件也接受目录（目录会自动展开成 `**/*.ts` + `**/*.tsx` 并带上测试/声明的排除项），路径前带不带 `./` 都行。**范围内一个变异体都没产生会判失败**（路径写错、或该文件落在 `stryker.config.json` 的排除项里）——不这么判的话，「什么都没测到」会显示成 100% 通过。
 
 判据（只针对本次范围内的文件）：存活变异体数 ≤ `mutation.survivorsMax`（默认 0）、变异得分 ≥ `mutation.scoreMin`（默认 0）、零覆盖变异体数为 0（`mutation.failOnNoCoverage=true`）。报告：`reports/mutation/index.html`（人读）、`reports/mutation/mutation.json`（agent 解析）。
 

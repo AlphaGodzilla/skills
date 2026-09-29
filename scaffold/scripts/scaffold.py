@@ -171,22 +171,26 @@ def template_overlay_dirs(template_root: Path) -> list[Path]:
     ]
 
 
-def count_placeholder_files(overlay_dirs: list[Path], names: set[str]) -> dict[str, int]:
-    """统计每个占位符出现在多少个模板文件里（文件名与文件内容都算）。"""
+def count_placeholders(overlay_dirs: list[Path], names: set[str]) -> dict[str, int]:
+    """统计每个占位符在模板里出现的**总次数**（路径名与文件内容都算）。
+
+    用总次数而不是「涉及多少个文件」：某个文件里只被覆盖一部分同样会体现在差值上，
+    因此「一个文件里 7 处 `{{package}}` 被改掉 1 处」也拦得住。
+    """
     counts = dict.fromkeys(names, 0)
     for directory in overlay_dirs:
         for source in directory.rglob("*"):
-            if source.is_dir():
+            if source.is_dir() or source.name in IGNORED_FILES:
                 continue
             relative = source.relative_to(directory)
             if any(part in IGNORED_DIRECTORIES for part in relative.parts[:-1]):
                 continue
 
-            found: set[str] = set()
+            found: list[str] = []
             for part in relative.parts:  # 占位符也可能用在目录名/文件名里（后端的 {{package_path}}）
-                found.update(PLACEHOLDER.findall(part))
+                found.extend(PLACEHOLDER.findall(part))
             try:
-                found.update(PLACEHOLDER.findall(source.read_text(encoding="utf-8")))
+                found.extend(PLACEHOLDER.findall(source.read_text(encoding="utf-8")))
             except (UnicodeDecodeError, OSError):
                 pass
 
@@ -197,7 +201,7 @@ def count_placeholder_files(overlay_dirs: list[Path], names: set[str]) -> dict[s
 
 
 def require_placeholders(template: ModuleType, overlay_dirs: list[Path]) -> None:
-    """检查底座声明的占位符还在模板里，且覆盖的文件数不低于声明值。
+    """检查底座声明的占位符还在模板里，且总出现次数不低于声明值。
 
     这条检查专门拦一类事故：把「渲染后的结果」反向同步回模板目录，占位符被真实值覆盖。
     覆盖之后渲染照样能跑（只是再没有占位符），生成物会带着上一个项目的名字与标题，
@@ -205,9 +209,9 @@ def require_placeholders(template: ModuleType, overlay_dirs: list[Path]) -> None
     """
     declared = dict(getattr(template, "PLACEHOLDERS", {}) or {})
     if not declared:
-        raise SystemExit("底座没有声明 PLACEHOLDERS（占位符 → 至少出现在多少个模板文件里）")
+        raise SystemExit("底座没有声明 PLACEHOLDERS（占位符 → 至少出现多少次）")
 
-    counts = count_placeholder_files(overlay_dirs, set(declared))
+    counts = count_placeholders(overlay_dirs, set(declared))
     short = {
         name: (counts[name], minimum)
         for name, minimum in declared.items()
@@ -217,7 +221,7 @@ def require_placeholders(template: ModuleType, overlay_dirs: list[Path]) -> None
         return
 
     details = "\n".join(
-        f"    {{{{{name}}}}}：模板里只在 {found} 个文件里出现，声明要求至少 {minimum} 个"
+        f"    {{{{{name}}}}}：模板里只出现 {found} 次，声明要求至少 {minimum} 次"
         for name, (found, minimum) in short.items()
     )
     raise SystemExit(
@@ -343,12 +347,17 @@ def stray_comment_ends(text: str) -> list[int]:
 
     块注释里出现 `*/`（例如文档里写 `src/locales/*/menu.ts`）会提前结束注释，
     后面剩下的内容被当成代码——这是一类只在生成后才炸的模板笔误，所以在自检里拦住。
-    判定条件：以 `*` 开头的注释延续行里出现 `*/`，且其后还有非空白内容。
+    判定条件：以 `*` 开头的**注释延续行**（`*` 之后是空白或行尾）里出现 `*/`，且其后还有非空白内容。
+    要求「`*` 后跟空白」是必要的：`.gitignore` / glob 里的 `**/node_modules`、`*.log` 也以 `*` 开头，
+    但它们不是注释，不该被算进来。
     """
     lines: list[int] = []
     for number, line in enumerate(text.split("\n"), start=1):
         stripped = line.strip()
         if not stripped.startswith("*"):
+            continue
+        # `*` 之后必须是空白或行尾才算注释延续行（排掉 glob 与单独的 `*/` 结尾行）
+        if len(stripped) > 1 and not stripped[1].isspace():
             continue
         index = stripped[1:].find("*/")
         if index == -1:
@@ -374,6 +383,13 @@ def self_check(project_dir: Path, written: set[Path]) -> list[str]:
         leftover = PLACEHOLDER.search(text)
         if leftover:
             problems.append(f"{relative}: 残留占位符 {{{{{leftover.group(1)}}}}}")
+
+        # 块注释里提前出现的 `*/` 会把注释截断，剩下的半截变成代码（例如注释里写 `src/locales/*/menu.ts`）。
+        # 这类笔误只在生成后、甚至只在运行时才暴露，所以在自检里拦。
+        for number in stray_comment_ends(text):
+            problems.append(
+                f"{relative}:{number}: 块注释里出现提前闭合的 `*/`（其后还有内容，注释会被截断、剩余内容变成代码）"
+            )
 
         suffix = path.suffix.lower()
         if suffix in {".yml", ".yaml"} and yaml is not None:
@@ -472,9 +488,12 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"模板缺少目录：{directory}")
     # 先查占位符再落盘：模板被渲染结果污染时要立刻失败，而不是产出一个带旧名字的项目。
     # 检查覆盖整棵模板树（含未选中的能力组件），因此数字与本次组合无关。
+    # 检查覆盖整棵模板树（含未选中的能力组件），因此数字与本次组合无关。
     require_placeholders(template, template_overlay_dirs(template_root))
 
     variables = template.variables(options)
+    # 数字只保证「占位符还在」；这一项保证「每个含占位符的文件都真的随参数变化」，
+    # 因此同一个文件里被覆盖掉一部分也能查出来。
     written: set[Path] = set()
     for directory in overlay_dirs:
         copy_overlay(directory, target, variables, written)
