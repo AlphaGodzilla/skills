@@ -11,6 +11,8 @@ npm run dev           # 开发服务器，关掉 mock：/api/** 走 config/proxy
 npm test              # 单元 / 组件 / 服务契约测试（不需要后端，不判覆盖率）
 npm run test:coverage # 同上 + 覆盖率门禁
 npm run tsc           # 类型检查（tsc --noEmit，TS 7 / tsgo）
+npm run lint          # biome lint + tsc（提交前的快速自查）
+npm run antd:lint     # antd 用法检查（deprecated / a11y / usage / performance）
 npm run format        # 格式化并自动修复改动文件（biome check --write）
 npm run verify        # 完整验收：格式与静态检查 + 类型 + 测试与覆盖率 + CRAP
 npm run build         # 生产构建（产物在 dist/）
@@ -19,7 +21,7 @@ scripts/qa-gate.sh    # 提交前验收（等价 npm run verify；失败时打�
 scripts/mutation-gate.sh   # 变异测试门禁（可选，慢；默认只变异相对基线的变更文件）
 ```
 
-`npm run verify` 与 `scripts/qa-gate.sh` 覆盖同样的四道门禁，差别只在输出：前者失败即停，后者跑完所有门禁再告诉你「哪一道失败、证据在哪、下一步查什么」。
+`npm run verify` 与 `scripts/qa-gate.sh` 覆盖同样的五道门禁，差别只在输出：前者失败即停，后者跑完所有门禁再告诉你「哪一道失败、证据在哪、下一步查什么」。
 
 ## 测试分层
 
@@ -37,7 +39,7 @@ scripts/mutation-gate.sh   # 变异测试门禁（可选，慢；默认只变异
 2. **服务层测试断言请求形状**。这一层最容易写错的是路径、方法、参数位置，而页面测试看不出这类错误（页面只看返回值）。
 3. **测试不依赖真实后端**：页面与组件测试 mock `@umijs/max`（`Link` / `useIntl` / `useParams` / `history`）与 `@/services/*`。断言 i18n 时优先断言 **key**（mock 里记录 `id`），因为同一条文案在 mock 下都取 `defaultMessage`。
 
-## 四道门禁
+## 五道门禁
 
 `scripts/qa-gate.sh` 依次跑，全部通过才算验收通过：
 
@@ -45,10 +47,32 @@ scripts/mutation-gate.sh   # 变异测试门禁（可选，慢；默认只变异
 | --- | --- | --- | --- |
 | 格式与静态检查 | `node scripts/format-gate.mjs` | `biome.json` | **ratchet**：只检查相对基线（`origin/main` → `origin/master` → `HEAD`）有改动的文件，存量文件不会立刻报错，但新改动必须合规 |
 | 类型检查 | `npm run tsc` | `tsconfig.json`（strict） | TS 7（tsgo）；类型错误一律不能放过 |
+| antd 用法检查 | `npm run antd:lint` | `@ant-design/cli` 的内置规则 | 检 deprecated / a11y / usage / performance；原生命令有违规也返回 0，所以由 `scripts/antd-lint-gate.mjs` 包成非 0 退出 |
 | 测试与覆盖率 | `npm run test:coverage` | `gate.config.json` 的 `coverage` | v8 provider；行/分支/函数/语句四项都设了下限，任一不达标即失败 |
 | CRAP | `node scripts/crap-report.mjs` | `gate.config.json` 的 `crap.max` | `复杂度² × (1 − 覆盖率)³ + 复杂度`；补的是「跑到了但没断言」的风险。数据只用 `coverage/coverage-final.json`，不依赖 TS 的编译器 API |
 
 阈值集中在 [`gate.config.json`](../../gate.config.json)，覆盖率与 CRAP 共用一份，避免两处不一致。日志与证据落点：`reports/qa-gate/<门禁>.log`、`coverage/index.html`、`reports/crap/crap.txt`。
+
+## antd 用法检查与自带 skill
+
+本仓库自带两个**项目级 skill**（pi 从 `.pi/skills/` 自动发现）。antd 相关的事都走它们，不要凭记忆写 API：
+
+| skill | 什么时候用 | 关键动作 |
+| --- | --- | --- |
+| [`.pi/skills/antd/SKILL.md`](../../.pi/skills/antd/SKILL.md) | 写/改 antd 组件、查 props/token/demo、排查 antd 报错、单个组件跨版本迁移 | `npx antd info <组件> --format json` → 再写代码；改完 `npm run antd:lint` |
+| [`.pi/skills/pro-upgrade/SKILL.md`](../../.pi/skills/pro-upgrade/SKILL.md) | 升级 antd 版本，或把整个 Pro 框架升到最新上游模板 | 按其「拉上游模板 → 分类框架/业务文件 → 差异合并 → 验证」流程走 |
+
+`npx antd ...` 用的是 devDependency 里的 `@ant-design/cli`，**离线可用**（antd 元数据随包发布，覆盖 v3~v6）。常用查询：
+
+```bash
+npx antd info Button --format json      # 有哪些 props（写代码前先查）
+npx antd demo Button basic --format json # 可直接用的示例
+npx antd token Button --format json      # 组件级设计令牌（主题相关样式用）
+npx antd migrate 6 7 --format json       # 跨大版本迁移清单
+npx antd env --format json               # 环境快照（报 bug 时附上）
+```
+
+一个必须知道的坑：`npx antd lint` **发现违规也返回 0**（实测），所以别把它直接当门禁。仓库把它包成了 `npm run antd:lint`：解析 JSON 报告、有违规即非 0 退出，报告落在 `reports/qa-gate/antd-lint.json`。
 
 ## 变异测试（可选门禁）
 

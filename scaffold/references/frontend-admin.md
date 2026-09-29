@@ -16,7 +16,7 @@
 | `biome.json` | 格式化与 lint 的唯一配置（含 Tailwind 指令与忽略清单） |
 | `vitest.config.ts` | happy-dom、`tests/setupTests.ts`、覆盖率四项阈值（从 `gate.config.json` 读） |
 | `gate.config.json` | **门禁阈值单一来源**：覆盖率四项、`crap.max`、变异门禁三项 |
-| `stryker.config.json` | 变异测试：vitest runner、变异范围（见第七节）、报告落点 |
+| `stryker.config.json` | 变异测试：vitest runner、变异范围（见第八节）、报告落点 |
 | `.editorconfig`、`.gitignore` | 编辑器与忽略约定（`dist`、`coverage`、`reports`、`.umi*`、`.codegraph`、`.env`） |
 | `.env.example` | 本机覆盖项（`API_TARGET`）；复制为 `.env`（已 gitignore） |
 | `config/config.ts` | umi 配置总入口：路由、插件、代理、构建器 |
@@ -40,16 +40,18 @@
 | `tailwind.css`、`tailwind.config.js` | Tailwind 4 入口与内容范围 |
 | `tests/setupTests.ts` | 全局测试环境补充：localStorage、`matchMedia`、`ResizeObserver` |
 | `tests/architecture.test.ts` | 分层依赖守护（方向 + 跨层别名 + 空转检测） |
-| `scripts/qa-gate.sh` | 提交前验收：四道门禁 + 失败定位引导 |
+| `scripts/qa-gate.sh` | 提交前验收：五道门禁 + 失败定位引导 |
+| `scripts/antd-lint-gate.mjs` | antd 用法检查的包装（原生命令有违规也返回 0，见第七节） |
 | `scripts/mutation-gate.sh` | 可选的变异测试门禁（默认只变异变更文件） |
 | `scripts/format-gate.mjs` | 格式与静态检查的 ratchet 包装 |
 | `scripts/changed-files.mjs` | 「相对基线的改动文件」的统一口径（格式门禁与变异门禁共用） |
 | `scripts/crap-report.mjs` | CRAP 逐函数计算与门禁 |
-| `scripts/stryker-ts-compat-hooks.mjs`、`scripts/stryker-ts-compat-register.mjs` | 只给 Stryker 进程提供 TS 的 JS 编译器 API（见第七节） |
+| `scripts/stryker-ts-compat-hooks.mjs`、`scripts/stryker-ts-compat-register.mjs` | 只给 Stryker 进程提供 TS 的 JS 编译器 API（见第八节） |
 | `scripts/dev-test.sh`、`scripts/dev-run.sh`、`scripts/create-tag.sh` | 日常辅助脚本 |
 | `AGENTS.md`、`CLAUDE.md`、`docs/scaffold/*.md` | 给 agent 的渐进式指令：入口只放硬约束与「文档地图」，细节分三篇按需读 |
 | `README.md` | 面向人的项目说明（agent 指令里的最后一档） |
 | `.pi/sandbox.json` | git worktree 场景的沙箱放行（见 `docs/scaffold/development.md`） |
+| `.pi/skills/antd/`、`.pi/skills/pro-upgrade/` | 项目级 skill（pi 自动发现）：antd 的查询/用法检查/迁移，与 Pro 框架升级流程（见第七节） |
 
 ## 二、参数与占位符
 
@@ -81,16 +83,17 @@
 
 三条规则：**方向**（未列出的依赖一律禁止）、**别名**（跨层必须用 `@/`，同层用相对路径）、**文案**（任何层都不得直接 `import` `src/locales/`）。
 
-守护用正则抽取 import 说明符，**刻意不依赖 TypeScript 的编译器 API**：项目用的是 TS 7（tsgo），那套 JS API 已被移除（见第九节）。代价是注释与字符串里形如 `from '...'` 的文本会被误判，因此代码里不要那样写注释。守护另含「空转检测」：某个层没有文件被扫到即失败。
+守护用正则抽取 import 说明符，**刻意不依赖 TypeScript 的编译器 API**：项目用的是 TS 7（tsgo），那套 JS API 已被移除（见第十一节）。代价是注释与字符串里形如 `from '...'` 的文本会被误判，因此代码里不要那样写注释。守护另含「空转检测」：某个层没有文件被扫到即失败。
 
 ## 四、质量门禁
 
-`scripts/qa-gate.sh` 依次跑四道门禁，全部通过才算验收通过；阈值集中在 `gate.config.json`：
+`scripts/qa-gate.sh` 依次跑五道门禁，全部通过才算验收通过；阈值集中在 `gate.config.json`：
 
 | 门禁 | 命令 | 守护什么 |
 | --- | --- | --- |
 | 格式与静态检查 | `node scripts/format-gate.mjs` | Biome 的格式化与 lint；**ratchet**：只查相对基线（`origin/main` → `origin/master` → `HEAD`）的改动文件 |
 | 类型检查 | `npm run tsc` | TS 7 严格模式 |
+| antd 用法检查 | `npm run antd:lint` | 检 deprecated / a11y / usage / performance（见第七节）；单次约 0.3 秒 |
 | 测试与覆盖率 | `npm run test:coverage` | Vitest + v8 provider，行/分支/函数/语句四项下限（默认 80） |
 | CRAP | `node scripts/crap-report.mjs` | `复杂度² × (1 − 覆盖率)³ + 复杂度` 逐函数，上限 `crap.max`（默认 30） |
 
@@ -115,7 +118,7 @@ scripts/dev-run.sh --no-mock      # 等价 npm run dev，且回显代理目标
 | 主题 | `config/defaultSettings.ts` | ProLayout 的主题项（`navTheme` / `colorPrimary` / `layout` / `token`） |
 | 路由与菜单 | `config/routes.ts` | `name` 是文案 key，`hideInMenu` 控制侧栏可见性 |
 | 覆盖率 / CRAP 阈值 | `gate.config.json` | 改动前先想清楚理由 |
-| 变异范围 / 阈值 | `stryker.config.json` / `gate.config.json` 的 `mutation` | 见第七节 |
+| 变异范围 / 阈值 | `stryker.config.json` / `gate.config.json` 的 `mutation` | 见第八节 |
 
 开发辅助脚本（`scripts/`）：
 
@@ -136,7 +139,35 @@ Biome 同时承担格式化与 lint，因此**不引入 ESLint / Prettier**（�
 - `biome.json` 的 `files.includes` 排除生成物（`.umi*`、`dist`、`coverage`、`reports`）与 `tailwind.css` / `package-lock.json`；
 - 实测 ratchet 语义：干净树跳过（不报存量）、改动文件与未跟踪新文件都会被检查，非 git 仓库时退化为全量并给出提示。
 
-## 七、变异测试门禁（可选）
+## 七、antd 工具链与自带 skill
+
+底座把上游 Ant Design Pro 自带的两个 skill 一并搬了进来，放在 `base/.pi/skills/`（pi 的项目级 skill 目录，生成后即被自动发现）：
+
+| skill | 覆盖什么 | 关键动作 |
+| --- | --- | --- |
+| `.pi/skills/antd/` | 写/改 antd 组件、查 props / token / demo / doc、排查报错、单组件跨版本迁移、bug 上报（`antd bug` / `antd bug-cli`） | 先 `npx antd info <组件> --format json` 再写代码；改完 `npm run antd:lint` |
+| `.pi/skills/pro-upgrade/` | 把整个 Pro 框架升到最新上游模板 | 拉上游模板 → 分类框架/业务文件 → 差异合并 → 验证；框架文件清单与验证命令已按本底座改写 |
+
+两者正文与上游保持一致（便于日后与上游 `skills add` 对齐），只在开头加了「本仓库的差异」一节，写明本底座的命令名与门禁接线。生成出来的项目里，`AGENTS.md` 有两条硬约束与两行「文档地图」指向它们，`docs/scaffold/development.md` 有专节，`README.md` 有「自带 skill」一节。
+
+CLI 是 devDependency `@ant-design/cli`（antd 元数据随包发布，v3~v6 全离线）。常用命令：
+
+| 命令 | 用途 |
+| --- | --- |
+| `npx antd info <组件> --format json` | 有哪些 props（写代码前必查，别凭记忆） |
+| `npx antd demo <组件> <示例> --format json` | 可直接用的示例代码 |
+| `npx antd token <组件> --format json`、`npx antd semantic <组件> --format json` | 组件级设计令牌、语义化 classNames（主题与样式相关时用） |
+| `npx antd usage ./src --format json` | 项目里 antd 组件的使用统计 |
+| `npx antd migrate <旧> <新> --format json` | 跨大版本迁移清单 |
+| `npx antd env --format json` | 环境快照（报 bug 时附上） |
+
+### 为什么把 `antd lint` 包成了 `npm run antd:lint`
+
+`npx antd lint` **发现违规也返回 0**（实测：注入一处 deprecated 用法后退出码仍是 0），直接当门禁用会永远通过；它默认还只打印文本、不落报告。`scripts/antd-lint-gate.mjs` 改用 `--format json` 取结构化结果、落盘 `reports/qa-gate/antd-lint.json`、按 `summary.total` 判定，并把它接成 `scripts/qa-gate.sh` 的第 3 道门禁。原生输出里语法坏掉的文件会被 skip，这类文件由类型检查与 Biome 负责报错，脚本只做提示。
+
+规则四类：`deprecated`（如 antd 6 里 `Alert` 的 `message` 已改名 `title`）、`a11y`、`usage`、`performance`。
+
+## 八、变异测试门禁（可选）
 
 ### 范围：只变异「有判断的代码」
 
@@ -192,7 +223,7 @@ StrykerJS 的 sandbox 预处理要调用 `ts.parseConfigFileTextToJson`，而 TS
 
 Stryker 开源版的 `incremental` 是**跨次累加**的：上一次范围外的结果会被合并进本次报告，而且实测出现过「同一个文件、测试已经补过，复用的旧结果仍报存活」——门禁的结论必须可复现，所以默认清掉缓存跑本次范围（`--incremental` 仅供本地快速迭代）。JSON 报告另有一道保险：解析时按本次范围过滤，范围外的历史结果不计入判据。
 
-## 八、新增页面 / 模块
+## 九、新增页面 / 模块
 
 1. 建目录 `src/pages/<模块>/`（列表 `list/index.tsx`、详情 `detail/index.tsx`）。
 2. 纯逻辑放同目录的 `<名字>Query.ts` / `<名字>Form.ts`，配 `<名字>.test.ts`。
@@ -203,7 +234,7 @@ Stryker 开源版的 `incremental` 是**跨次累加**的：上一次范围外�
 
 删掉样例模块时：删 `src/pages/sample/`、`src/services/sample.{ts,test.ts}`、`mock/sample.ts`，并从 `config/routes.ts` 与两处 `menu.ts` 里移除 `sample-list` / `sample-detail`。`src/utils/format.ts` 与 `src/components/` 是框架级代码，建议保留。
 
-## 九、扩展底座
+## 十、扩展底座
 
 | 想加什么 | 怎么做 |
 | --- | --- |
@@ -215,7 +246,7 @@ Stryker 开源版的 `incremental` 是**跨次累加**的：上一次范围外�
 
 底座自身的扩展点（`scaffold` skill 内部）：新增底座只需在 `templates/<名字>/` 下提供 `base/` 与 `template.py`（声明 `DESCRIPTION` / `PARAMS` / `OPTIONS` / `variables` / `overlays` / `summary` / `post_generate` / `next_steps`），通用渲染引擎会自动挂上参数、做产物自检并渲染。
 
-## 十、选型与代价
+## 十一、选型与代价
 
 | 选择 | 代价 / 理由 |
 | --- | --- |
@@ -227,27 +258,30 @@ Stryker 开源版的 `incremental` 是**跨次累加**的：上一次范围外�
 | 变异测试只覆盖逻辑密集文件 | 呈现层不纳入，避免逼出断言样式的脆测试；代价是呈现层依赖组件测试与人工确认 |
 | 不接 E2E | 骨架阶段保持门禁快（几秒级）；代价是跨页面流程没有自动验证 |
 
-## 十一、已验证范围
+## 十二、已验证范围
 
 验证环境：macOS（arm64）、Node 22.19、npm 11.19、Java 无关；每次生成后都在新目录实跑。
 
 生成与安装：
 
-- 生成：`uv run scripts/scaffold.py --template frontend-admin --name admin-web --title "订单管理后台" --api-target http://localhost:9090`，产出 74 个文件；占位符全部替换，JSON / TOML / YAML 自检通过。
-- `codegraph init`：52 个文件 / 337 节点 / 676 边（TS 项目可索引）；未安装 CLI 时静默跳过。
+- 生成：`uv run scripts/scaffold.py --template frontend-admin --name admin-web --title "订单管理后台" --api-target http://localhost:9090`，产出 77 个文件；占位符全部替换，JSON / TOML / YAML / 块注释自检通过。
+- 自带 skill：两个 skill 随生成物写入 `.pi/skills/`（pi 的项目级 skill 目录，见 pi 文档 `docs/configuration.md`）；skill 里出现的命令与 `package.json` 脚本逐条对齐（`npm run antd:lint` / `npm run verify` / `scripts/qa-gate.sh`）。
+- `codegraph init`：53 个文件 / 358 节点 / 711 边（TS 项目可索引）；未安装 CLI 时静默跳过。
 - `npm install`：冷缓存约 80 秒，命中缓存约 10~20 秒；`prepare` 的 `max setup` 正常生成 `src/.umi`。
 
 测试、构建与门禁：
 
+- `npm run lint`（`biome lint + tsc`）：58 个文件、约 0.1 秒通过。
 - `npm test`：14 个测试文件 / 89 个用例全部通过，约 3 秒（不需要后端）。
 - `npm run test:coverage`：语句 97.5% / 分支 98.9% / 函数 94.7% / 行 97.4%（阈值 80）。
 - `npm run build`：5.4 秒，产出 `dist/index.html`、`dist/samples/index.html`、`dist/samples/:id/index.html`、`dist/404.html`。
-- `scripts/qa-gate.sh`：四道门禁全绿（格式与静态检查、类型检查、测试与覆盖率、CRAP）；CRAP 统计 57 个函数，最高 10.0，上限 30。
+- `scripts/qa-gate.sh`：五道门禁全绿（格式与静态检查、类型检查、antd 用法检查、测试与覆盖率、CRAP）；CRAP 统计 57 个函数，最高 10.0，上限 30。
 
 门禁的拦截能力（都用反例实测）：
 
 - **CRAP**：注入一个圈复杂度 9、零覆盖的函数后报 `1 个函数超过 crapMax=30`（该函数 CRAP 90.0），退出码 1。
 - **格式 ratchet**：干净树跳过；改动一个文件 + 新增一个未跟踪文件时，`changed-files.mjs` 精确列出这两个文件，`format-gate.mjs` 报出两处违规。
+- **antd 用法检查**：`npx antd lint ./src` 干净时 0.3 秒；注入一处 deprecated 用法（antd 6 里 `<Alert message="..." />`，已改名 `title`）后，**原生命令退出码仍是 0**，而 `npm run antd:lint` 报出 `file:line [deprecated] Alert \`message\` is deprecated...` 并退出 1——这正是把它包一层的原因。
 - **变异测试**：范围内全量 152 个变异体、killed 152、得分 100%、23 秒；单文件（`src/utils/format.ts`）52 个变异体、100%、约 14 秒。
 - **陈旧报告防护**：把 `stryker.config.json` 改坏后跑门禁，脚本报「未产出报告」并贴出日志尾部，而不是读到上一次的报告误判通过。
 

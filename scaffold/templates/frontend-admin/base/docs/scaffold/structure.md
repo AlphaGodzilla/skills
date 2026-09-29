@@ -24,6 +24,7 @@
 | `tests/` | 全局测试环境（`setupTests.ts`）与跨模块守护（`architecture.test.ts`） |
 | `scripts/` | 开发与门禁脚本，用法见 [`development.md`](development.md) |
 | `docs/scaffold/` | 本目录：给 agent 的按需章节，由 [`AGENTS.md`](../../AGENTS.md) 按任务分发 |
+| `.pi/skills/` | **项目级 skill**（pi 自动发现）：`antd/` 管 antd 的查询与用法检查，`pro-upgrade/` 管 antd 与 Pro 框架升级。antd 相关任务先读它们，不要凭记忆写 API；用法见 [`development.md`](development.md) |
 | `.codegraph/` | 本机 CodeGraph 索引（生成器在装了 CLI 时执行 `codegraph init --yes` 建立）：已在 `.gitignore` 里忽略整个目录，不入库；重建用 `codegraph index`，增量用 `codegraph sync` |
 
 ## 分层与依赖规则

@@ -15,11 +15,13 @@
     "test:watch": "vitest",
     "tsc": "tsc --noEmit",
     "biome:lint": "biome lint",
+    "lint": "npm run biome:lint && npm run tsc",
+    "antd:lint": "node scripts/antd-lint-gate.mjs",
     "format": "biome check --write",
     "format:all": "biome check",
     "format:check": "node scripts/format-gate.mjs",
     "crap": "node scripts/crap-report.mjs",
-    "verify": "npm run format:check && npm run tsc && npm run test:coverage && npm run crap",
+    "verify": "npm run format:check && npm run tsc && npm run antd:lint && npm run test:coverage && npm run crap",
     "mutation": "node --import ./scripts/stryker-ts5-register.mjs ./node_modules/@stryker-mutator/core/bin/stryker.js run"
   },
   "browserslist": [
@@ -35,6 +37,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@ant-design/cli": "^6.6.5",
     "@biomejs/biome": "^2.5.3",
     "@stryker-mutator/core": "10.0.0",
     "@stryker-mutator/vitest-runner": "10.0.0",

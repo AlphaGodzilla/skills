@@ -92,7 +92,7 @@ uv run <skill 目录>/scripts/scaffold.py \
 两个底座已包含、无需用户再做的部分：
 
 - `backend-monolith`：Gradle 构建与 wrapper、Spotless 格式化（`ratchetFrom HEAD`）、六边形分层骨架、RFC 7807 错误体、ULID id 生成、ArchUnit 架构守护、健康端点、API 文档站（springdoc + knife4j）、离线可跑的单元/契约测试 profile、集成测试脚手架（`@Tag("integration")` + `scripts/dev-it.sh`）、覆盖率与 CRAP 门禁、**可选变异测试门禁**（`scripts/mutation-gate.sh` + `./gradlew pitest`，PIT 依赖挂独立 configuration，不参与 `./gradlew build`）、CodeGraph 索引、给 agent 的渐进式指令。
-- `frontend-admin`：依赖清单与 npm 脚本、TS 7 严格配置、Biome 格式化与静态检查、Umi Max 路由/布局/请求/i18n 装配、ProLayout 外观、RFC 7807 错误处理、断网横幅与渲染期兜底（含发版后 chunk 失效的重试）、Tailwind 与 antd-style 入口、开发期 mock、分层依赖守护（`tests/architecture.test.ts`）、覆盖率门禁、CRAP 门禁（只用 istanbul 覆盖率数据，与 TS 版本无关）、**可选变异测试门禁**（StrykerJS + 只给 Stryker 进程用的 TS 兼容内核）、CodeGraph 索引、给 agent 的渐进式指令。
+- `frontend-admin`：依赖清单与 npm 脚本、TS 7 严格配置、Biome 格式化与静态检查、Umi Max 路由/布局/请求/i18n 装配、ProLayout 外观、RFC 7807 错误处理、断网横幅与渲染期兜底（含发版后 chunk 失效的重试）、Tailwind 与 antd-style 入口、开发期 mock、分层依赖守护（`tests/architecture.test.ts`）、覆盖率门禁、CRAP 门禁（只用 istanbul 覆盖率数据，与 TS 版本无关）、**antd 用法门禁**（`npm run antd:lint`：`npx antd lint` 有违规也返回 0，故包成非 0 退出）、**上游自带的两个项目级 skill**（`.pi/skills/antd/` 与 `.pi/skills/pro-upgrade/`，pi 自动发现，`AGENTS.md` 与 `docs/scaffold/` 均有指向它们的引导）、**可选变异测试门禁**（StrykerJS + 只给 Stryker 进程用的 TS 兼容内核）、CodeGraph 索引、给 agent 的渐进式指令。
 
 两个底座都**不覆盖部署阶段**：不要生成镜像构建、编排或环境清单文件。
 
@@ -103,7 +103,7 @@ uv run <skill 目录>/scripts/scaffold.py \
 - [ ] 参数齐全，取值在 `template.py` 的 `PARAMS` 允许集合内（默认值已按规则补齐并说明）
 - [ ] 生成目录结构符合对应 `references/<底座>.md` 的描述
 - [ ] 后端：`./gradlew build` 通过（含覆盖率与 CRAP 门禁），且 `pitest` 未被 `build` 触发
-- [ ] 前端：`npm install` 成功、`scripts/qa-gate.sh` 四道门禁全绿
+- [ ] 前端：`npm install` 成功、`scripts/qa-gate.sh` 五道门禁全绿
 - [ ] 各自的变异测试门禁可跑通（`mutation-gate.sh --file <某个源文件>` 给出存活/零覆盖明细）
 - [ ] 报告写明所选参数与取值来源，并给出三项收尾提醒
 - [ ] 未就框架、分层或构建形态向用户提问

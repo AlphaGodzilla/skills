@@ -15,6 +15,7 @@ Order Admin —— 基于 Ant Design Pro v6 的前端管理后台。本仓库由
 | 样式 | Tailwind CSS 4 + antd-style | 布局用 Tailwind，主题相关样式用 `createStyles` 取 token |
 | 语言/类型 | TypeScript 7（tsgo），`strict` | 类型检查是门禁的一部分 |
 | 格式与静态检查 | Biome 2 | 同时承担格式化与 lint；不引入 ESLint / Prettier |
+| antd 工具链 | `@ant-design/cli`（离线元数据） | 写 antd 代码前查 API、改完查违规；由自带 skill `.pi/skills/antd/` 使用 |
 | 测试 | Vitest 4 + Testing Library + happy-dom | 单元 / 组件 / 服务契约三层，全部离线可跑 |
 | 变异测试 | StrykerJS 10（可选门禁） | 需要 TS 的 JS 编译器 API，由兼容层单独提供（见下） |
 | 构建器 | utoopack（Turbopack 内核） | `npm run build`，产物在 `dist/` |
@@ -48,8 +49,10 @@ API_TARGET=http://localhost:9090 npm run dev    # 关掉 mock，/api/** 代理�
 | `npm run crap` | 只看 CRAP 分数（需要先跑过 `test:coverage`） |
 | `npm run build` | 生产构建 |
 | `npm run preview` | 本地预览构建产物（:8000） |
+| `npm run lint` | biome lint + tsc（快速自查） |
+| `npm run antd:lint` | antd 用法检查（deprecated / a11y / usage / performance） |
 | `npm run mutation` | 变异测试（可选，慢；等价于 `stryker run`） |
-| `scripts/qa-gate.sh` | **提交前验收**：跑四道门禁，失败时打印哪道失败、证据与下一步 |
+| `scripts/qa-gate.sh` | **提交前验收**：跑五道门禁，失败时打印哪道失败、证据与下一步 |
 | `scripts/mutation-gate.sh` | 变异测试门禁（可选；默认只变异相对基线的变更文件） |
 | `scripts/dev-test.sh` | 跑测试的小工具（支持 `--watch`、单文件、`-t` 过滤） |
 | `scripts/dev-run.sh` | 启动开发服务器（`--no-mock` 打真实后端） |
@@ -74,22 +77,37 @@ tests/                  全局测试环境 + 分层依赖守护
 scripts/                开发与门禁脚本
 docs/scaffold/          给 agent 的按需章节（开发流程、目录职责、请求层约定）
 public/scripts/loading.js  首屏占位脚本（构建时进 HTML）
+.pi/skills/            项目级 skill：antd（antd 查询与用法检查）、pro-upgrade（antd 与 Pro 框架升级）
 ```
 
 ## 质量门禁
 
-提交前必须过 `scripts/qa-gate.sh`，它依次跑四道门禁：
+提交前必须过 `scripts/qa-gate.sh`，它依次跑五道门禁：
 
 | 门禁 | 判据 | 阈值位置 |
 | --- | --- | --- |
 | 格式与静态检查 | Biome；**ratchet**：只检查相对基线的改动文件 | `biome.json` |
 | 类型检查 | `tsc --noEmit`（strict） | `tsconfig.json` |
+| antd 用法检查 | `@ant-design/cli` 的内置规则（deprecated / a11y / usage / performance） | 规则随 CLI 版本 |
 | 测试与覆盖率 | Vitest + v8 覆盖率，行/分支/函数/语句四项 | `gate.config.json` 的 `coverage` |
 | CRAP | `复杂度² × (1 − 覆盖率)³ + 复杂度`，逐函数检查 | `gate.config.json` 的 `crap.max` |
 
 另有**可选的变异测试门禁** `scripts/mutation-gate.sh`：它默认不参与验收（慢），默认只变异相对基线的变更文件，判据是「存活变异体 ≤ `mutation.survivorsMax`（默认 0）、得分 ≥ `mutation.scoreMin`、零覆盖变异体为 0」。报告在 `reports/mutation/`。
 
 **门禁失败时的正确修法是改被测代码或补测试**，不要改测试套件、门禁阈值或排除规则。`scripts/qa-gate.sh` 失败时会直接告诉你证据文件与下一步。
+
+## 自带 skill（面向 agent）
+
+仓库自带两个项目级 skill，pi 从 `.pi/skills/` 自动发现；人也可以直接照它们的命令用：
+
+| skill | 用途 | 常用命令 |
+| --- | --- | --- |
+| [`.pi/skills/antd/SKILL.md`](.pi/skills/antd/SKILL.md) | antd 的 API/token/demo 查询、用法检查、单组件跨版本迁移、bug 上报 | `npx antd info Button --format json`、`npm run antd:lint` |
+| [`.pi/skills/pro-upgrade/SKILL.md`](.pi/skills/pro-upgrade/SKILL.md) | 把项目升到最新 Ant Design Pro 模板（含 antd 大版本迁移检查） | 按 skill 内的「拉模板 → 分类框架/业务文件 → 差异合并 → 验证」流程 |
+
+两个 skill 都来自上游 [ant-design/ant-design-pro](https://github.com/ant-design/ant-design-pro)，正文与上游保持一致；本地差异（命令名、门禁接线）写在各 skill 开头的「本仓库的差异」一节。
+
+> 注意：`npx antd lint` 发现违规也返回 0，所以仓库把它包成了 `npm run antd:lint`（有违规即非 0 退出）。
 
 ### 关于 TypeScript 7 与变异测试
 

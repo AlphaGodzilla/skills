@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 提交前的验收入口：跑四道门禁（格式与静态检查、类型检查、测试与覆盖率、CRAP），
+# 提交前的验收入口：跑五道门禁（格式与静态检查、类型检查、antd 用法检查、测试与覆盖率、CRAP），
 # **失败时把「哪一道门禁失败、证据在哪个文件、下一步查什么」打印出来**。
 #
 # 用法：
@@ -9,7 +9,7 @@
 #
 # 与其它脚本的分工：
 #   dev-test.sh       日常快速跑测试，不判覆盖率与 CRAP
-#   qa-gate.sh        提交前验收：格式 / 类型 / 测试与覆盖率 / CRAP；**不含**变异测试
+#   qa-gate.sh        提交前验收：格式 / 类型 / antd 用法 / 测试与覆盖率 / CRAP；**不含**变异测试
 #   mutation-gate.sh  可选的变异测试门禁（慢），单独跑
 #
 # 各道门禁的日志落在 reports/qa-gate/<门禁>.log。
@@ -23,6 +23,7 @@ FORMAT_LOG="${REPORT_DIR}/format.log"
 TYPES_LOG="${REPORT_DIR}/types.log"
 TESTS_LOG="${REPORT_DIR}/tests.log"
 CRAP_LOG="${REPORT_DIR}/crap.log"
+ANTD_LOG="${REPORT_DIR}/antd-lint.log"
 mkdir -p "${REPORT_DIR}"
 
 # 从 gate.config.json 读阈值，保证失败时打印的阈值与本次实际生效的一致。
@@ -57,6 +58,8 @@ run_gate() {
 echo "▸ QA 门禁（提交前验收）"
 run_gate "格式与静态检查" "${FORMAT_LOG}" node scripts/format-gate.mjs ${GATE_ARGS[@]+"${GATE_ARGS[@]}"} || true
 run_gate "类型检查" "${TYPES_LOG}" npm run --silent tsc || true
+# antd 用法检查：`npx antd lint` 有违规也返回 0，所以走包装脚本（见 scripts/antd-lint-gate.mjs）
+run_gate "antd 用法检查" "${ANTD_LOG}" node scripts/antd-lint-gate.mjs --report reports/qa-gate/antd-lint.json || true
 run_gate "测试与覆盖率" "${TESTS_LOG}" npm run --silent test:coverage || true
 # 测试失败时覆盖率数据是残缺的，CRAP 的数字不可靠，但仍然跑一次以给出可用线索
 run_gate "CRAP" "${CRAP_LOG}" node scripts/crap-report.mjs || true
@@ -71,7 +74,8 @@ if [[ ${#failed_gates[@]} -eq 0 ]]; then
     echo "            $(grep -E '^ *Tests ' "${TESTS_LOG}" | tail -1 | sed 's/^ *//')"
     grep -E '^Lines +:' "${TESTS_LOG}" | sed 's/^/  · 行覆盖 /' || true
     echo "  · CRAP：$(grep -E '^✓ 没有函数超过' "${CRAP_LOG}" | head -1 || echo 'n/a')"
-    echo "  · 报告：coverage/index.html（覆盖率）、reports/crap/crap.txt（CRAP 明细）"
+    echo "  · antd 用法：$(grep -E '^✓ antd 用法检查通过' "${ANTD_LOG}" | head -1 || echo 'n/a')"
+    echo "  · 报告：coverage/index.html（覆盖率）、reports/crap/crap.txt（CRAP 明细）、reports/qa-gate/antd-lint.json（antd 用法）"
     echo "  · 日志：${REPORT_DIR}/"
     exit 0
 fi
@@ -91,7 +95,17 @@ if in_failed_gates "类型检查"; then
     echo "  完整错误：${TYPES_LOG}"
 fi
 
-# 2) 测试失败（架构守护也是普通测试文件，走同一条路径）
+# 2) antd 用法问题：deprecated / a11y / usage / performance，由自带 skill 的 CLI 检出
+if in_failed_gates "antd 用法检查"; then
+    matched=1
+    echo
+    echo "▸ antd 用法检查未通过（deprecated / a11y / usage / performance）"
+    grep -E '^    ' "${ANTD_LOG}" | head -10 | sed 's/^    /  · /' || true
+    echo "  修法：先查当前版本 API（npx antd info <Component>），再改代码；"
+    echo "        排查与迁移清单见 .pi/skills/antd/SKILL.md；报告：reports/qa-gate/antd-lint.json"
+fi
+
+# 3) 测试失败（架构守护也是普通测试文件，走同一条路径）
 if in_failed_gates "测试与覆盖率"; then
     matched=1
     echo
@@ -110,7 +124,7 @@ if in_failed_gates "测试与覆盖率"; then
     fi
 fi
 
-# 3) 覆盖率低于下限
+# 4) 覆盖率低于下限
 if log_has 'does not meet global threshold' "${TESTS_LOG}"; then
     matched=1
     echo
@@ -124,7 +138,7 @@ if log_has 'does not meet global threshold' "${TESTS_LOG}"; then
     echo "  · 报告：coverage/index.html"
 fi
 
-# 4) CRAP 超过上限
+# 5) CRAP 超过上限
 if log_has '^✗ [0-9]+ 个函数超过' "${CRAP_LOG}"; then
     matched=1
     echo
@@ -134,7 +148,7 @@ if log_has '^✗ [0-9]+ 个函数超过' "${CRAP_LOG}"; then
     echo "  明细：reports/crap/crap.txt"
 fi
 
-# 5) 格式与静态检查违规
+# 6) 格式与静态检查违规
 if in_failed_gates "格式与静态检查"; then
     matched=1
     echo
@@ -149,7 +163,7 @@ fi
 if [[ ${matched} -eq 0 ]]; then
     echo
     echo "▸ 未能归类失败原因，附各门禁日志尾部"
-    for log in "${FORMAT_LOG}" "${TYPES_LOG}" "${TESTS_LOG}" "${CRAP_LOG}"; do
+    for log in "${FORMAT_LOG}" "${TYPES_LOG}" "${ANTD_LOG}" "${TESTS_LOG}" "${CRAP_LOG}"; do
         [[ -f "${log}" ]] || continue
         echo "  ── ${log}"
         tail -n 8 "${log}" | sed 's/^/     /'
@@ -163,12 +177,13 @@ cat <<'TXT'
   · 修完重跑：scripts/qa-gate.sh
   · 只看覆盖率：npm run test:coverage（报告在 coverage/index.html）
   · 只看 CRAP：npm run crap（明细在 reports/crap/crap.txt）
+  · 只看 antd 用法：npm run antd:lint（明细在 reports/qa-gate/antd-lint.json；写 antd 代码前先查 .pi/skills/antd/SKILL.md）
   · 只重跑一个测试文件：npx vitest run src/utils/format.test.ts
   · 变异测试（可选，慢）：scripts/mutation-gate.sh（默认只变异变更文件；详见 docs/scaffold/development.md）
   · 各门禁日志：reports/qa-gate/
 
 禁止为了让门禁变绿而修改测试套件（测试代码、断言、vi.mock、exclude）、门禁阈值
-（gate.config.json 的 coverage 与 crap 段）或排除规则。门禁失败时的正确修法是：
+（gate.config.json 的 coverage 与 crap 段）、stryker.config.json 的排除规则。门禁失败时的正确修法是：
 改被测代码，或补测试。确需放宽阈值时单独提交并写明理由。
 TXT
 
