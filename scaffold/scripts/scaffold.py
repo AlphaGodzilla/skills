@@ -342,33 +342,60 @@ def copy_overlay(overlay: Path, target: Path, variables: dict[str, str], written
         written.add(destination)
 
 
+def block_comment_open_at_end_of(line: str, in_comment: bool) -> bool:
+    """扫过一行，返回该行结束时是否仍处于块注释内。
+
+    只认真正的 `/*` … `*/` 配对，不做字符串字面量识别——模板里用不着那么精确，
+    而「必须真的在块注释里」这一点足以排掉 markdown 项目符号与 glob。
+    """
+    index = 0
+    while index < len(line):
+        if in_comment:
+            end = line.find("*/", index)
+            if end == -1:
+                return True
+            in_comment = False
+            index = end + 2
+        else:
+            start = line.find("/*", index)
+            if start == -1:
+                return False
+            in_comment = True
+            index = start + 2
+    return in_comment
+
+
 def stray_comment_ends(text: str) -> list[int]:
-    """找出「注释里提前闭合的 */」所在行号。
+    """找出「块注释里提前闭合的 */」所在行号。
 
     块注释里出现 `*/`（例如文档里写 `src/locales/*/menu.ts`）会提前结束注释，
     后面剩下的内容被当成代码——这是一类只在生成后才炸的模板笔误，所以在自检里拦住。
-    判定条件：以 `*` 开头的**注释延续行**（`*` 之后是空白或行尾）里出现 `*/`，且其后还有非空白内容。
-    要求「`*` 后跟空白」是必要的：`.gitignore` / glob 里的 `**/node_modules`、`*.log` 也以 `*` 开头，
-    但它们不是注释，不该被算进来。
+
+    判定条件：**该行处于块注释内**、以 `*` 开头（`*` 后是空白或行尾）的延续行里出现 `*/`，
+    且其后还有非空白内容。「处于块注释内」这个前提是必要的：markdown 的项目符号
+    （形如「* 通配符 `*/` 后面还有内容」的项目符号）与 `.gitignore` 的 glob（`**/node_modules`、`*.log`）
+    也都以 `*` 开头，但它们不是注释，不该被算进来。
+    局限：单行注释（`/* 见 a/*/b.ts */`）不检——无法与「注释后接代码」的正常写法区分，
+    强行检会误伤 `int a = 1; /* 说明 */` 这类正常行。
     """
     lines: list[int] = []
+    in_comment = False
     for number, line in enumerate(text.split("\n"), start=1):
         stripped = line.strip()
-        if not stripped.startswith("*"):
-            continue
-        # `*` 之后必须是空白或行尾才算注释延续行（排掉 glob 与单独的 `*/` 结尾行）
-        if len(stripped) > 1 and not stripped[1].isspace():
-            continue
-        index = stripped[1:].find("*/")
-        if index == -1:
-            continue
-        if stripped[1:][index + 2 :].strip():
-            lines.append(number)
+        if (
+            in_comment
+            and stripped.startswith("*")
+            and (len(stripped) == 1 or stripped[1].isspace())
+        ):
+            index = stripped[1:].find("*/")
+            if index != -1 and stripped[1:][index + 2 :].strip():
+                lines.append(number)
+        in_comment = block_comment_open_at_end_of(line, in_comment)
     return lines
 
-
 def self_check(project_dir: Path, written: set[Path]) -> list[str]:
-    """渲染后自检：占位符残留、YAML / TOML / JSON 是否可解析。返回问题清单（空表示通过）。
+    """渲染后自检：占位符残留、YAML / TOML / JSON 是否可解析、块注释是否被提前闭合。
+    返回问题清单（空表示通过）。
 
     这些是模板编写错误，不是用户输入错误：宁可生成时立刻失败，也不要交付一个起不来的项目。
     """
@@ -488,12 +515,9 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit(f"模板缺少目录：{directory}")
     # 先查占位符再落盘：模板被渲染结果污染时要立刻失败，而不是产出一个带旧名字的项目。
     # 检查覆盖整棵模板树（含未选中的能力组件），因此数字与本次组合无关。
-    # 检查覆盖整棵模板树（含未选中的能力组件），因此数字与本次组合无关。
     require_placeholders(template, template_overlay_dirs(template_root))
 
     variables = template.variables(options)
-    # 数字只保证「占位符还在」；这一项保证「每个含占位符的文件都真的随参数变化」，
-    # 因此同一个文件里被覆盖掉一部分也能查出来。
     written: set[Path] = set()
     for directory in overlay_dirs:
         copy_overlay(directory, target, variables, written)

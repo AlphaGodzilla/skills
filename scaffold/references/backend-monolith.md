@@ -205,7 +205,7 @@ components/cache-redis/      # 缓存能力组件
 
 生成器是 PEP 723 单文件脚本（`scripts/scaffold.py`）：用 `uv run scripts/scaffold.py ...` 执行，uv 按内联元数据（`requires-python = ">=3.11"`、`dependencies = ["PyYAML>=6.0"]`）建隔离环境，不污染全局 Python；用系统 `python3` 直接跑也能工作，PyYAML 缺失时只跳过 YAML 自检并给出提示。
 
-每次渲染后生成器自检产物：占位符是否残留、`*.yml` 能否被 PyYAML 解析、`*.toml` 能否被 tomllib 解析；发现问题返回非 0 并列出问题文件，此时不要交付，先修模板。改模板后建议至少跑一次全组合渲染，确认自检与 `./gradlew spotlessCheck` 都过。
+每次渲染后生成器自检产物：占位符是否残留、`*.yml` 能否被 PyYAML 解析、`*.toml` 能否被 tomllib 解析、`*.json` 能否被 json 解析、块注释是否被提前闭合（注释延续行里出现 `*/`）；**渲染前**另查 `template.py` 的 `PLACEHOLDERS`（占位符 → 至少出现多少次）。发现问题返回非 0 并列出问题文件，此时不要交付，先修模板。改模板后建议至少跑一次全组合渲染，确认自检与 `./gradlew spotlessCheck` 都过。
 
 需要一次性工具时用 `uvx` 临时执行，不装全局、不写进依赖。例如给 `scripts/` 下的 shell 脚本做静态检查：
 
@@ -213,7 +213,7 @@ components/cache-redis/      # 缓存能力组件
 uvx --from shellcheck-py shellcheck -S warning -x scripts/*.sh scripts/lib/*.sh
 ```
 
-加新组件：在 `components/` 下新建目录（如 `cache-caffeine` 的形状），在 `templates/backend-monolith/template.py` 的 `DATA_COMPONENTS` / `CACHE_COMPONENTS`（以及 `variables()` 里对应的变量）登记名称与目录。加新底座：在 `templates/` 下新建目录，至少含 `base/` 与声明契约的 `template.py`，在 `SKILL.md` 的底座清单里加一行，并写一份对应的 `references/<底座>.md`。
+加新组件：在 `components/` 下新建目录（如 `cache-caffeine` 的形状），在 `templates/backend-monolith/template.py` 里做三件事：`DATA_COMPONENTS` / `CACHE_COMPONENTS` 登记目录、对应 `PARAMS` 的 `choices` 里加上新取值（否则命令行选不中）、`variables()` 里补它需要的变量；若新增了占位符，同步更新 `PLACEHOLDERS`。加新底座：在 `templates/` 下新建目录，至少含 `base/` 与声明契约的 `template.py`，在 `SKILL.md` 的底座清单里加一行，并写一份对应的 `references/<底座>.md`。
 
 维护提醒：模板目录里出现 `bin/`、`build/`、`.gradle/`、`.idea/` 时说明有人就地构建过；生成器会跳过这些目录，仓库 `.gitignore` 也已忽略，但应当清理。改命令、脚本行为或数据 / 缓存约定时，同步更新 `README.md` 与 `docs/scaffold/` 下对应的那一篇，`AGENTS.md` 只在硬约束或文档地图变化时动。
 

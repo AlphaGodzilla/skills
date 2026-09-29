@@ -83,6 +83,20 @@ if [[ ${ALLOW_NO_COVERAGE} -eq 1 ]]; then FAIL_ON_NO_COVERAGE="false"; fi
 # 只变异业务源码：测试文件与类型声明不参与（stryker.config.json 的 mutate 也是同一口径）。
 SOURCE_FILTER='^src/.*\.(ts|tsx)$'
 
+# 取 stryker.config.json 里的排除模式（`!` 开头那些）。
+#
+# 为什么必须从配置里读、而不是在本脚本里再抄一份：`--mutate` 会**整体替换**配置的 mutate 清单，
+# 而配置里的排除项（`!src/locales/**`、`!src/pages/**/index.tsx`、`!src/components/**` 等）表达的是
+# 「呈现层不纳入变异」这条策略。抄一份就会漂移——真出现过的 bug：目录范围只补了测试与 .d.ts，
+# 于是 `--file src/pages/sample/list` 把 index.tsx 也变异了，几十个样式/配置类变异体报存活 → 门禁假失败。
+config_exclusions() {
+    node -e '
+        const fs = require("node:fs");
+        const config = JSON.parse(fs.readFileSync("stryker.config.json", "utf8"));
+        process.stdout.write((config.mutate ?? []).filter((item) => item.startsWith("!")).join(","));
+    ' 2>/dev/null || true
+}
+
 # 把 --file 的取值整理成 Stryker 的 --mutate 口径：
 #   · 目录要展开成 glob（Stryker 不认裸目录，会「找不到文件」并提前退出）；
 #   · 路径必须存在，写错时立刻报错，而不是让 Stryker 抛一句与范围无关的「No tests were executed」。
@@ -92,8 +106,8 @@ normalize_scope() {
         if [[ -d "${entry}" ]]; then
             # 注意：Stryker 的 --mutate 是逗号分隔的，`{ts,tsx}` 会被逗号切成两半，
             # 因此目录要展开成两个独立条目，不能用花括号 glob。
-            # 注意：`--mutate` 会**整体替换** stryker.config.json 的 mutate 清单，所以配置里的排除项
-            # （测试文件、类型声明、呈现层）在这里必须自己带上，否则会把测试文件也变异一遍。
+            # 注意：`--mutate` 会**整体替换** stryker.config.json 的 mutate 清单，
+            # 配置里的排除项（测试文件、类型声明、呈现层）由下面的 config_exclusions() 统一补上。
             expanded+=(
                 "${entry}/**/*.ts"
                 "${entry}/**/*.tsx"
@@ -165,6 +179,12 @@ if [[ ${INCREMENTAL_RUN} -eq 0 && -f "${INCREMENTAL}" ]]; then
     rm -f "${INCREMENTAL}"
 fi
 
+# 指定范围（--file / 变更文件）时把 stryker.config.json 里的排除项一并带上：`--mutate` 会替换
+# 整份清单，不带上就等于「改到呈现层文件 → 门禁按逻辑代码的标准要求零存活」，那是假失败。
+if [[ -n "${TARGETS}" ]]; then
+    EXCLUSIONS="$(config_exclusions)"
+    if [[ -n "${EXCLUSIONS}" ]]; then TARGETS="${TARGETS},${EXCLUSIONS}"; fi
+fi
 echo "▸ 变异测试门禁（可选，不属于 npm run verify）"
 echo "  · 范围：${TARGET_DESC}"
 if [[ -n "${TARGETS}" && "${MODE}" != "changed" ]]; then
@@ -191,6 +211,12 @@ set -e
 
 if [[ ! -f "${JSON}" ]]; then
     echo
+    # changed 模式下范围来自 git，路径不可能写错；没产出报告只可能是「变更文件全被配置排除」
+    # （例如只改了呈现层）。那种情况该通过并说明，而不是报失败。
+    if [[ "${MODE}" == "changed" ]]; then
+        echo "✓ 本次变更的文件都不在变异范围内（配置排除了它们，如呈现层与文案）——无需变异测试。"
+        exit 0
+    fi
     echo "✗ 变异测试未产出报告（stryker 退出码 ${stryker_status}）"
     echo "  常见原因（Stryker 自己的报错常常指向别处）："
     echo "    · 范围路径没匹配到文件：目录要写成 glob（本脚本已自动展开），文件要写成相对仓库根的路径；"
@@ -254,6 +280,10 @@ count_status() { awk -F'\t' -v s="$1" '$1 == s' "${TSV}" | wc -l | tr -d ' '; }
 # 静默通过会让门禁在「其实什么都没测」的情况下亮绿灯。
 if [[ "${total}" -eq 0 ]]; then
     echo
+    if [[ "${MODE}" == "changed" ]]; then
+        echo "✓ 本次变更的文件都不在变异范围内（配置排除了它们）——无需变异测试。"
+        exit 0
+    fi
     echo "✗ 本次范围内没有产生任何变异体（${TARGET_DESC}）"
     echo "  · 范围条目：${TARGETS:-<stryker.config.json 的 mutate 清单>}"
     echo "  · 常见原因：路径写错；或该文件落在 mutate 排除项里（src/locales/**、src/pages/**/index.tsx、"
