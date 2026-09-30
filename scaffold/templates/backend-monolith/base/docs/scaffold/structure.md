@@ -21,6 +21,7 @@
 | `scripts/` | 开发辅助脚本，用法见 [`development.md`](development.md) |
 | `docs/scaffold/` | 本目录：给 agent 的按需章节，由 [`AGENTS.md`](../../AGENTS.md) 按任务分发 |
 | `.codegraph/` | 本机 CodeGraph 索引（生成器在装了 CLI 时执行 `codegraph init --yes` 建立）：已在 `.gitignore` 里忽略整个目录，不入库；重建用 `codegraph index`，增量用 `codegraph sync` |
+| `.mcp.json` | 项目级 MCP 配置：把 CodeGraph 配成 MCP server（`codegraph serve --mcp`；`--skip-codegraph` 只跳过 `codegraph init`，不影响本文件） |
 
 限界上下文内部的分层（六边形）：
 

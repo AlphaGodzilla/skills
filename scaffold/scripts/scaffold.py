@@ -413,10 +413,13 @@ def self_check(project_dir: Path, written: set[Path]) -> list[str]:
 
         # 块注释里提前出现的 `*/` 会把注释截断，剩下的半截变成代码（例如注释里写 `src/locales/*/menu.ts`）。
         # 这类笔误只在生成后、甚至只在运行时才暴露，所以在自检里拦。
-        for number in stray_comment_ends(text):
-            problems.append(
-                f"{relative}:{number}: 块注释里出现提前闭合的 `*/`（其后还有内容，注释会被截断、剩余内容变成代码）"
-            )
+        # markdown / 纯文本跳过：它们没有块注释语法，而 `* ` 项目符号很常见——纯词法状态机在
+        # 「先出现一个未闭合的 `/*`」时仍会把项目符号当成注释延续行；而这类文件里的笔误也不会影响生成物。
+        if path.suffix.lower() not in {".md", ".markdown"}:
+            for number in stray_comment_ends(text):
+                problems.append(
+                    f"{relative}:{number}: 块注释里出现提前闭合的 `*/`（其后还有内容，注释会被截断、剩余内容变成代码）"
+                )
 
         suffix = path.suffix.lower()
         if suffix in {".yml", ".yaml"} and yaml is not None:

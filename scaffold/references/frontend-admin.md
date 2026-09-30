@@ -6,7 +6,7 @@
 
 ## 一、组成
 
-`base/` 下 77 个文件，按目录分组：
+`base/` 下 78 个文件，按目录分组：
 
 | 路径 | 职责 |
 | --- | --- |
@@ -51,6 +51,7 @@
 | `AGENTS.md`、`CLAUDE.md`、`docs/scaffold/*.md` | 给 agent 的渐进式指令：入口只放硬约束与「文档地图」，细节分三篇按需读 |
 | `README.md` | 面向人的项目说明（agent 指令里的最后一档） |
 | `.pi/sandbox.json` | git worktree 场景的沙箱放行（见 `docs/scaffold/development.md`） |
+| `.mcp.json` | 项目级 MCP 配置：把 CodeGraph 配成 MCP server（`codegraph serve --mcp`），未建索引时该 server 仍能启动但没有默认项目：结构查询会要求传 `projectPath`（指向已索引的项目），本目录则应回退到内置的 Read/Grep/Glob，因此生成后先跑一次 `codegraph init` 体验才完整 |
 | `.pi/skills/antd/`、`.pi/skills/pro-upgrade/` | 项目级 skill（pi 自动发现）：antd 的查询/用法检查/迁移，与 Pro 框架升级流程（见第七节） |
 
 ## 二、参数与占位符
@@ -267,14 +268,14 @@ Stryker 开源版的 `incremental` 是**跨次累加**的：上一次范围外�
 
 生成与安装：
 
-- 生成：`uv run scripts/scaffold.py --template frontend-admin --name admin-web --title "订单管理后台" --api-target http://localhost:9090`，产出 77 个文件；占位符全部替换，JSON / TOML / YAML / 块注释自检通过。
+- 生成：`uv run scripts/scaffold.py --template frontend-admin --name admin-web --title "订单管理后台" --api-target http://localhost:9090`，产出 78 个文件；占位符全部替换，JSON / TOML / YAML / 块注释自检通过。
 - 自带 skill：两个 skill 随生成物写入 `.pi/skills/`（pi 的项目级 skill 目录，见 pi 文档 `docs/configuration.md`）；skill 里出现的命令与 `package.json` 脚本逐条对齐（`npm run antd:lint` / `npm run verify` / `scripts/qa-gate.sh`）。
 - `codegraph init`：53 个文件 / 358 节点 / 711 边（TS 项目可索引）；未安装 CLI 时静默跳过。
 - `npm install`：冷缓存约 80 秒，命中缓存约 10~20 秒；`prepare` 的 `max setup` 正常生成 `src/.umi`。
 
 测试、构建与门禁：
 
-- `npm run lint`（`biome lint + tsc`）：58 个文件、约 0.1 秒通过。
+- `npm run lint`（`biome lint + tsc`）：59 个文件、约 0.1 秒通过。
 - `npm test`：14 个测试文件 / 89 个用例全部通过，约 3 秒（不需要后端）。
 - `npm run test:coverage`：语句 97.5% / 分支 98.9% / 函数 94.7% / 行 97.4%（阈值 80）。
 - `npm run build`：5.4 秒，产出 `dist/index.html`、`dist/samples/index.html`、`dist/samples/:id/index.html`、`dist/404.html`。

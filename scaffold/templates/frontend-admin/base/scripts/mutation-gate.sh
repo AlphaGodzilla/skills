@@ -90,11 +90,19 @@ SOURCE_FILTER='^src/.*\.(ts|tsx)$'
 # 「呈现层不纳入变异」这条策略。抄一份就会漂移——真出现过的 bug：目录范围只补了测试与 .d.ts，
 # 于是 `--file src/pages/sample/list` 把 index.tsx 也变异了，几十个样式/配置类变异体报存活 → 门禁假失败。
 config_exclusions() {
-    node -e '
+    local output
+    # 配置读不出来时**必须硬失败**：静默返回空串会让 Stryker 用默认配置跑（默认 test runner 不是 vitest），
+    # 表现成「全部变异体超时」，而超时在本脚本里计入 killed —— 那就是一次假通过。
+    if ! output="$(node -e '
         const fs = require("node:fs");
         const config = JSON.parse(fs.readFileSync("stryker.config.json", "utf8"));
         process.stdout.write((config.mutate ?? []).filter((item) => item.startsWith("!")).join(","));
-    ' 2>/dev/null || true
+    ' 2>/dev/null)"; then
+        echo "✗ 读不出 stryker.config.json 的排除项（文件缺失或不是合法 JSON）" >&2
+        echo "  变异门禁需要这份配置来限定范围与 test runner；缺了它会退化成「全部超时却算 killed」的假通过。" >&2
+        return 1
+    fi
+    printf '%s' "${output}"
 }
 
 # 把 --file 的取值整理成 Stryker 的 --mutate 口径：
@@ -182,12 +190,12 @@ fi
 # 指定范围（--file / 变更文件）时把 stryker.config.json 里的排除项一并带上：`--mutate` 会替换
 # 整份清单，不带上就等于「改到呈现层文件 → 门禁按逻辑代码的标准要求零存活」，那是假失败。
 if [[ -n "${TARGETS}" ]]; then
-    EXCLUSIONS="$(config_exclusions)"
+    EXCLUSIONS="$(config_exclusions)" || exit 2
     if [[ -n "${EXCLUSIONS}" ]]; then TARGETS="${TARGETS},${EXCLUSIONS}"; fi
 fi
 echo "▸ 变异测试门禁（可选，不属于 npm run verify）"
 echo "  · 范围：${TARGET_DESC}"
-if [[ -n "${TARGETS}" && "${MODE}" != "changed" ]]; then
+if [[ -n "${TARGETS}" ]]; then
     echo "  · 目标：${TARGETS}"
 fi
 echo "  · 阈值：存活 ≤ ${MAX_SURVIVORS}，得分 ≥ ${MIN_SCORE}%，零覆盖判失败=${FAIL_ON_NO_COVERAGE}"
@@ -299,6 +307,16 @@ compile_error="$(count_status CompileError)"
 runtime_error="$(count_status RuntimeError)"
 ignored="$(count_status Ignored)"
 killed_total=$((killed + timed_out + runtime_error + compile_error))
+
+# 全部变异体都超时：几乎一定是测试运行器没跑起来（而不是「都被杀掉了」）。
+# 超时计入 killed 是 PIT 的惯例，但整批超时必须判失败，否则门禁会假通过。
+if [[ "${total}" -gt 0 && "${timed_out}" -eq "${total}" ]]; then
+    echo
+    echo "✗ ${total} 个变异体全部超时：测试运行器很可能没跑起来，不能按 killed 计"
+    echo "  · 先确认 stryker.config.json 存在且合法、testRunner=vitest；再重跑"
+    echo "  · 日志：${LOG}"
+    exit 1
+fi
 scored=$((total - ignored))
 score="$(awk -v k="${killed_total}" -v s="${scored}" 'BEGIN { printf "%.1f", (s > 0 ? k * 100 / s : 100) }')"
 

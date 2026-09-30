@@ -51,7 +51,7 @@ API_TARGET=http://localhost:9090 npm run dev    # 关掉 mock，/api/** 代理�
 | `npm run preview` | 本地预览构建产物（:8000） |
 | `npm run lint` | biome lint + tsc（快速自查） |
 | `npm run antd:lint` | antd 用法检查（deprecated / a11y / usage / performance） |
-| `npm run mutation` | 变异测试（可选，慢；等价于 `stryker run`） |
+| `npm run mutation` | 变异测试（可选，慢）。脚本已带上 TS 兼容钩子，**别直接跑 `npx stryker run`**（会因 TS 7 没有 JS 编译器 API 而崩） |
 | `scripts/qa-gate.sh` | **提交前验收**：跑五道门禁，失败时打印哪道失败、证据与下一步 |
 | `scripts/mutation-gate.sh` | 变异测试门禁（可选；默认只变异相对基线的变更文件） |
 | `scripts/dev-test.sh` | 跑测试的小工具（支持 `--watch`、单文件、`-t` 过滤） |
