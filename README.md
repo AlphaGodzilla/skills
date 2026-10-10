@@ -16,6 +16,7 @@ skill 之间除显式声明外互不依赖，可单独复制到任意仓库使�
 | --- | --- | --- | --- |
 | `firecrawl` | 在会话中获取网页数据：搜索、抓取、交互、文档解析、页面监控与科研索引 | 需要实时网页数据、抓取指定 URL、解析本地 PDF/DOCX、监控页面变化 | [`firecrawl/`](firecrawl/SKILL.md) |
 | `ontology-modeling` | 把业务需求转成 OMF v6 本体驱动建模框架的模型文件 M1~M6（可选 M7/MU/MM/MI） | 用户要求"按本体建模""生成 M1~M6""输出九大模型""做需求建模"，或给出一段业务需求要求产出这些模型 | [`ontology-modeling/`](ontology-modeling/SKILL.md) |
+| `ontology-reverse-modeling` | 从已有代码库逆向提取 M1～M7、ME、MM、MI，MU 按需；附源码证据、覆盖与差异清单 | 「代码库逆向建模」「从源码生成 M1~M7/MM/MI」「还原现有系统本体模型」 | [`ontology-reverse-modeling/`](ontology-reverse-modeling/SKILL.md) |
 | `doc-writing-conventions` | 撰写或修改 skill、AGENTS.md/CLAUDE.md、ADR 三类文档时的中文行文规范 | 新建或编辑 skill、写项目代理指令文件、记录架构决策 | [`doc-writing-conventions/`](doc-writing-conventions/SKILL.md) |
 | `adr-writing` | 创建、更新与维护架构决策记录（ADR），模板基于 MADR 4.0.0 中文版 | 用户说"写 ADR""沉淀决策""更新/取代 ADR"，或刚拍板技术选型、持久化方案、部署形态、模块边界等决策 | [`adr-writing/`](adr-writing/SKILL.md) |
 | `scaffold` | 从内置技术底座生成新项目骨架，替代重复选型（当前底座：后端单体应用、前端管理后台） | 用户说"新建项目""起一个后端""起一个管理后台""搭个骨架""初始化工程"，或要求创建后端服务 / 前端后台但未指定技术栈 | [`scaffold/`](scaffold/SKILL.md) |
@@ -54,6 +55,26 @@ skill 之间除显式声明外互不依赖，可单独复制到任意仓库使�
 | `scripts/omf_validate.py` | 结构与跨模型引用校验器（PEP 723，uv 隔离运行） |
 
 硬性约定：业务建模阶段禁止输出任何代码；模型变更必须同步全部引用文件并跑校验，错误清零前禁止提交。
+
+## ontology-reverse-modeling
+
+从已有代码库提取 OMF v6 的当前实现模型，不用需求补全或理想架构替代源码事实。默认交付 M1～M7、ME、MM、MI 共 10 个 YAML，MU 仅在明确要求且有 UI 源码时提取；无事件、审批或表映射时允许相应集合为空，但必须记录搜索判据。
+
+显式依赖 `ontology-modeling`：复用 `references/model-templates.md` 与 `scripts/omf_validate.py`，不能单独复制使用。源码提取由执行 skill 的模型或工程师沿调用链完成；检查脚本不是跨语言自动业务解析器。
+
+输出目录兼容 `ontology-modeling`：默认 `docs/model/`，标准 `intake/` 信息包、`yaml/`、`reviews/`、README 阶段状态与 CHANGELOG 保持原名；`diagrams/` 按需。逆向证据与差异仅扩展 `intake/`，不替代标准文件；后续建模无需搬移或重命名产物。目录契约见 [输出说明](ontology-reverse-modeling/references/output-contract.md)。
+
+| 路径 | 作用 |
+| --- | --- |
+| `SKILL.md` | 范围确认、只读取证、依赖顺序、输出与验收 |
+| `references/framework-profile.md` | 模型职责、标准文件集合与原文口径冲突 |
+| `references/code-evidence.md` | 安全扫描与逐模型取证判据 |
+| `references/output-contract.md` | 范围、证据、Pointer 追溯、覆盖及差异清单格式 |
+| `references/validation.md` | 可复现命令、自动检查边界与人工门禁 |
+| `scripts/omf_reverse_check.py` | 检查交付集合与证据清单，并调用共享通用校验器 |
+| `tests/test_reverse_check.py` | `/tmp` 合成夹具下的机械检查测试 |
+
+硬性约定：不读凭证、隐私或生产数据；不改业务代码；未知项先询问；同步跨聚合调用不伪造为事件协同。机械校验通过不证明业务语义正确，开放缺口必须随现状模型交付。结构与依赖决策见 [ADR](docs/adr/0001-add-reverse-skill-and-reuse-omf.md)，目录交接决策见 [ADR](docs/adr/0002-align-reverse-output-with-ontology-modeling.md)。
 
 ## doc-writing-conventions
 
