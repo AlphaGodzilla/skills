@@ -15,11 +15,12 @@
   python3 scripts/omf_validate.py --dir docs/model
 
 检查内容：
-  1. 结构：文件存在、根键、必需字段、枚举取值、重复 ID。
-  2. 引用：跨模型 ID 是否可解析（悬空引用）。
-  3. 同步：M2/M7 一对一、M3 与 ME 订阅双向一致、ME 生产者与 M2/M3 双向一致、
+  1. 格式：模型文件正文必须是块状 YAML，顶层为 JSON/flow 文档时报错。
+  2. 结构：文件存在、根键、必需字段、枚举取值、重复 ID。
+  3. 引用：跨模型 ID 是否可解析（悬空引用）。
+  4. 同步：M2/M7 一对一、M3 与 ME 订阅双向一致、ME 生产者与 M2/M3 双向一致、
      M4 事件链、M6 角色/子流程/网关/可达性。
-  4. 影响面：--impact 打印某 ID 在各文件中的引用位置，用于同步修改。
+  5. 影响面：--impact 打印某 ID 在各文件中的引用位置，用于同步修改。
 
 退出码：0 通过；1 有错误（--strict 时警告亦算错误）；2 环境或必需文件缺失。
 YAML 解析优先用 PyYAML，缺失时回退到系统 ruby 的 psych（标准库，无第三方依赖）。
@@ -133,11 +134,32 @@ def as_list(v):
     return v if isinstance(v, list) else [v]
 
 
-def load_yaml(path):
-    text = open(path, encoding="utf-8").read()
+def parse_yaml(text):
     if _pyyaml is not None:
         return _pyyaml.safe_load(text)
     return _ruby_load(text)
+
+
+def content_format_error(text):
+    """模型文件正文顶层必须是块状 YAML；返回错误说明，合规或无法判定时返回 None。"""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("%"):
+            continue
+        if line.startswith("---"):
+            line = line[3:].strip()
+            if not line:
+                continue
+        if line[0] in "{[":
+            return "正文顶层必须是块状 YAML，不得以 %s 开头（JSON 文档不符合模型文件格式）" % line[0]
+        return None
+    return None
+
+
+def check_content_format(rep, name, text):
+    message = content_format_error(text)
+    if message:
+        rep.error("%s: %s" % (name, message))
 
 
 def _ruby_load(text):
@@ -164,7 +186,10 @@ def load_models(root, rep):
                 rep.info("可选模型文件不存在（跳过）: " + fname)
             continue
         try:
-            docs[key] = load_yaml(path) or {}
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            check_content_format(rep, fname, text)
+            docs[key] = parse_yaml(text) or {}
         except Exception as exc:
             rep.error("解析失败 %s: %s" % (fname, exc))
     return docs

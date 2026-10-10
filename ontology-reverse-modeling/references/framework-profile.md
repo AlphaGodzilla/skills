@@ -20,7 +20,7 @@
 | MI | `mi-interface-model.yaml` | `INTERFACE` | `interfaces` | 系统提供和依赖的接口契约 |
 | MU（可选） | `mu-ui-model.yaml` | `UI` | `screens`、`cross_cutting` | 已有 UI 的屏幕、控件、导航和调用链追溯 |
 
-ID 与全部字段复用 `ontology-modeling/references/model-templates.md`；只抽取源码证实的取值，禁止照抄其合同、订单和审批示例。每个文件必须显式保留所有列表根键；空集合写 `[]`，不是 `null` 或缺省。
+ID 与全部字段复用 `ontology-modeling/references/model-templates.md`；只抽取源码证实的取值，禁止照抄其合同、订单和审批示例。每个文件必须显式保留所有列表根键；空集合写 `[]`，不是 `null` 或缺省。正文必须是块状 YAML 映射，顶层首字符为 `{` 或 `[` 的 JSON 或 flow 文档会被检查脚本拒绝；字段值内部的 YAML flow 写法不受限制。
 
 `version` 是模型文件的版本，不是必须填写为 `6.0` 的框架版本。新文件按目标项目已确认的版本策略填写；已有文件保留独立版本及稳定 ID。
 

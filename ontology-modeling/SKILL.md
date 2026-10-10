@@ -18,6 +18,8 @@ description: 把模糊的业务需求转成 OMF v6 本体驱动建模框架的�
    - 允许：`docs/model/` 下的 markdown 与 YAML 模型文件；模型字段中规范定义的表达式与伪代码（M2 `preconditions`/`postconditions`、M3 `expression`、M6 `conditionExpression`）与 M7 `referenceSql`，这些是模型语义而非实现代码。
    - 用户要求生成代码时：停下并说明本阶段只交付模型，代码生成属于实现层，另开任务。
 
+2. **模型文件正文必须是 YAML 语法**：`docs/model/yaml/` 下每个 `*.yaml` 的正文必须用块状 YAML 书写，顶层为块状映射；禁止整体写成 JSON 对象或数组。JSON 在语法上属于 YAML 子集，`.yaml` 文件名不使 JSON 正文合规；字段值内部的 YAML flow 写法不受此限制。校验器对顶层首字符为 `{` 或 `[` 的文件直接报错。
+
 ## 何时适用 / 何时不适用
 
 适用：
@@ -77,7 +79,7 @@ docs/model/
 │   ├── actor-permission.md       # 角色权限表
 │   ├── flow-catalog.md           # 流程目录
 │   └── open-questions.md         # 待确认清单
-├── yaml/                         # 模型文件
+├── yaml/                         # 模型文件（块状 YAML 正文）
 │   ├── m1-object-model.yaml
 │   ├── m2-behavior-model.yaml
 │   ├── m3-rule-model.yaml
@@ -153,6 +155,7 @@ docs/model/
 - [ ] M6 每条流程有唯一开始活动与至少一个结束活动，人工活动仅引用 M5 `roleId`
 - [ ] 审批流覆盖通过、驳回、退回，网关非默认分支都有条件
 - [ ] 跨模型引用 ID 全部可解析，无悬空引用
+- [ ] 模型文件正文为块状 YAML，无整体 JSON 文档
 - [ ] 全部建模文档已保存到 `docs/model/` 并纳入 git 版本控制
 - [ ] 已把破坏性变更写入 `docs/model/CHANGELOG.md`
 - [ ] 变更已按同步矩阵更新全部引用文件，`omf_validate.py --strict` 零错误

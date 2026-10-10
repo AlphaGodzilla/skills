@@ -84,6 +84,24 @@ docs/model/yaml/
 └── mi-interface-model.yaml        # 可选
 ```
 
+正文必须用块状 YAML 书写，顶层直接写根键；禁止整体写成 JSON 对象或数组。JSON 在语法上属于 YAML 子集，`.yaml` 文件名不使 JSON 正文合规；字段值内部的 YAML flow 写法不受限制，校验器对顶层首字符为 `{` 或 `[` 的文件报错。
+
+正例：
+
+```yaml
+model_type: OBJECT
+version: "1.0"
+domain: 合同域
+aggregates:
+  - id: AGG-CONTRACT-001
+```
+
+反例（整体 JSON 文档，校验器报错）：
+
+```json
+{"model_type": "OBJECT", "version": "1.0", "domain": "合同域", "aggregates": []}
+```
+
 `docs/model/` 下除 `yaml/` 外还有 `intake/`（需求与 DDD 中间结果）、`diagrams/`（可视化，可选）、`README.md`（索引与阶段状态）与 `CHANGELOG.md`；完整目录与版本管理规则见 `SKILL.md` 的「输出目录与版本管理」节。
 
 ## 三、M1 对象模型

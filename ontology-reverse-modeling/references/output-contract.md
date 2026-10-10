@@ -21,7 +21,7 @@ docs/model/
 │   ├── repository-map.md         # 逆向扩展：源码与入口索引
 │   ├── extraction-map.md         # 逆向扩展：候选项、调用链与证据
 │   └── reverse-manifest.yaml     # 逆向扩展：证据、覆盖与差异权威清单
-├── yaml/
+├── yaml/                         # 模型文件，正文为块状 YAML
 │   ├── m1-object-model.yaml
 │   ├── m2-behavior-model.yaml
 │   ├── m3-rule-model.yaml

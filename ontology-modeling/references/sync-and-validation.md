@@ -73,6 +73,7 @@ uv run tools/omf_validate.py --dir docs/model --report build/model-validation.md
 | 类别 | 检查内容 |
 | --- | --- |
 | 结构 | 必需文件存在、根键存在且为列表、必需字段齐全、枚举取值合法、ID 无重复 |
+| 格式 | 模型文件正文为块状 YAML；顶层首字符为 `{` 或 `[` 的 JSON/flow 文档报错 |
 | 引用 | 全部跨模型 ID 可解析（悬空引用为零） |
 | 同步 | M2/M7 一对一双向一致；M3 事件驱动规则与 ME 订阅双向一致；ME 生产者与 M2/M3 `producedEvents` 双向一致；M4 事件链（触发事件已发布、生产行为在场景内、规则订阅场景事件）；M6 角色归属、网关分支、分支目标、子流程无环 |
 | 索引 | `README.md` 与 `CHANGELOG.md` 存在 |

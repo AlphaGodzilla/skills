@@ -400,6 +400,26 @@ class ReverseCheckTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "重复键"):
             REVERSE.check_reverse(self.repo, self.root, VALIDATOR)
 
+    def test_json_model_content_is_rejected(self):
+        path = self.ydir / VALIDATOR.MODEL_FILES["me"][0]
+        path.write_text('{"model_type": "EVENT", "version": "1.0", "domain": "合成测试域", "events": []}\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "块状 YAML"):
+            REVERSE.check_reverse(self.repo, self.root, VALIDATOR)
+
+    def test_shared_validator_reports_json_model_content(self):
+        path = self.ydir / VALIDATOR.MODEL_FILES["me"][0]
+        path.write_text('{\n  "model_type": "EVENT",\n  "events": []\n}\n', encoding="utf-8")
+        report = VALIDATOR.Report()
+        VALIDATOR.load_models(str(self.root), report)
+        self.assertTrue(any("块状 YAML" in message for message in report.errors))
+
+    def test_block_yaml_with_flow_values_is_accepted(self):
+        path = self.ydir / VALIDATOR.MODEL_FILES["me"][0]
+        path.write_text('model_type: EVENT\nversion: "1.0"\ndomain: 合成测试域\nevents: [{"eventId": "Item.Changed"}]\n', encoding="utf-8")
+        report = VALIDATOR.Report()
+        VALIDATOR.load_models(str(self.root), report)
+        self.assertEqual([], [message for message in report.errors if "块状 YAML" in message])
+
     def test_json_pointer_escaping(self):
         self.assertEqual(REVERSE.pointer_value({"a/b": {"~key": [42]}}, "/a~1b/~0key/0"), 42)
         for pointer in ("/a~2b", "/a~1b/~0key/-1", "/a~1b/~0key/00"):

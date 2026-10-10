@@ -121,7 +121,7 @@ def load_validator(path):
     require(spec is not None and spec.loader is not None, "无法加载可信校验脚本")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    for name in ("MODEL_FILES", "ROOTS", "main"):
+    for name in ("MODEL_FILES", "ROOTS", "content_format_error", "main"):
         require(hasattr(module, name), f"共享校验器缺少 {name}，请确认依赖版本")
     return module
 
@@ -206,6 +206,9 @@ def check_reverse(repo, model_root, validator):
         filename = validator.MODEL_FILES[model][0]
         path = safe_path(repo, f"{model_relative}/yaml/{filename}")
         require(path.is_file(), f"缺少逆向交付必需文件: {filename}")
+        text = path.read_text(encoding="utf-8")
+        message = validator.content_format_error(text)
+        require(message is None, f"{filename}: {message}")
         docs[model] = read_mapping(path)
         for field in ("model_type", "version", "domain"):
             nonempty_text(docs[model].get(field), f"{filename}.{field}")
