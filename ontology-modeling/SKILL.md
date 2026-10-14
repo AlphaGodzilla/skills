@@ -7,9 +7,9 @@ description: 把模糊的业务需求转成 OMF v6 本体驱动建模框架的�
 
 ## 做什么
 
-本 skill 把一段业务需求变成 OMF v6 框架的模型文件，读者是负责需求建模的模型（agent）。要解决的问题是：用户通常只描述"有哪些功能"，不描述对象生命周期、跨对象联动、审批分支、异常路径与数据范围，直接建模必然漏模型。读完能按倒推流程，先建一份"建模信息包"，再产出 M1～M6（用户要求时追加 M7/MU/MM/MI），并在过程中主动追问补出用户未声明的业务场景。全文分：铁律、适用边界、原则、倒推流程、输出目录与版本管理、场景补全追问、同步与校验、自检。
+本 skill 把一段业务需求变成 OMF v6 框架的模型文件，读者是负责需求建模的模型（agent）。要解决的问题是：用户通常只描述"有哪些功能"，不描述对象生命周期、跨对象联动、审批分支、异常路径与数据范围，直接建模必然漏模型。读完能按倒推流程，先建一份"建模信息包"，再产出 M1～M6（用户要求时追加 M7/MU/MM/MI），并在过程中主动追问补出用户未声明的业务场景。全文分：铁律、适用边界、原则、倒推流程、输出目录与版本管理、场景补全追问、同步与校验、可视化审计辅助、自检。
 
-上游规范：`https://github.com/sharptoolbox/ontology_modeling_framework/blob/main/ontology_modeling_framework_v6.md`。本 skill 只描述流程与追问法；字段与模板见 `references/model-templates.md`，评审门禁见 `references/consistency-gates.md`，变更同步与结构校验见 `references/sync-and-validation.md`。
+上游规范：`https://github.com/sharptoolbox/ontology_modeling_framework/blob/main/ontology_modeling_framework_v6.md`。本 skill 描述建模流程与追问法，并附带只读可视化审计工具；字段与模板见 `references/model-templates.md`，评审门禁见 `references/consistency-gates.md`，变更同步与结构校验见 `references/sync-and-validation.md`。
 
 ## 铁律
 
@@ -141,6 +141,10 @@ docs/model/
 
 ➡️ <推荐答案>
 ```
+
+## 可视化审计辅助
+
+用户需要导入 YAML 做可视化审计，或模型规模较大、需要人工评审时，先读 `references/visual-audit.md`，提供 `tools/model-auditor/omf-auditor.html` 入口与操作说明。工具只读展示已有模型；工具维护是独立辅助任务，不改变业务建模阶段只产出文档与模型的边界，也不替代 `omf_validate.py --strict`。
 
 ## 自检
 

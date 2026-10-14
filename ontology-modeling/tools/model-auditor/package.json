@@ -1,0 +1,22 @@
+{
+  "name": "omf-model-auditor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "test": "node --test core.test.mjs && node dom.test.mjs",
+    "test:core": "node --test core.test.mjs",
+    "test:dom": "node dom.test.mjs",
+    "test:browser": "node browser.test.mjs",
+    "build:start": "node build.mjs start",
+    "build:part": "node build.mjs part",
+    "build:finish": "node build.mjs finish"
+  },
+  "dependencies": {"yaml": "2.8.1"},
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "esbuild": "0.25.10",
+    "jsdom": "26.1.0"
+  }
+}

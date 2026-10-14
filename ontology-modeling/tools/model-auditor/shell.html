@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>OMF 模型审计器 · 离线 MVP</title>
+<!--CSS-->
+</head>
+<body>
+<a class="skip-link" href="#main">跳到审计内容</a>
+<header class="app-header"><div class="brand"><span class="brand-icon">◎</span><div>模型审计器 <span class="version">MVP</span><small>ONTOLOGY MODEL AUDITOR</small></div></div>
+<nav class="top-nav" aria-label="主导航"><button data-page="models" class="active">模型工作台</button><button data-page="issues">问题清单 <span id="issue-count">0</span></button><button data-page="matrix">权限矩阵</button><button data-page="files">导入文件</button></nav>
+<div class="header-actions"><span class="offline"><i></i> 离线运行</span><button data-action="export">↓ 导出审阅</button><button class="primary" data-action="import">＋ 导入 YAML</button></div></header>
+<div id="banner" class="banner" role="status" hidden><span id="banner-text"></span><button data-action="close-banner" aria-label="关闭消息">×</button></div>
+<div id="workspace" class="workspace hide-inspector">
+<aside class="sidebar" aria-label="模型目录"><div class="sidebar-header"><h2>模型目录</h2><span id="list-count">0 个定义</span></div>
+<label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="搜索名称 / ID / 文件" aria-label="搜索模型"><kbd>/</kbd></label>
+<select id="kind-filter" aria-label="模型类型筛选"></select>
+<div class="sidebar-stats"><div><strong id="file-count">0</strong><span>模型文件</span></div><div><strong id="model-count">0</strong><span>模型定义</span></div><div><strong id="review-count">0</strong><span>已审阅</span></div></div>
+<div id="record-list" class="record-list"></div>
+<div class="sidebar-footer"><strong>审查语义，不只检查格式。</strong><span>引用来自模型显式字段，不猜测业务关系。</span><button data-action="demo">加载示例模型 →</button></div></aside>
+<div class="content-column"><div class="content-toolbar"><span>只读模型 · 人工审计</span><button id="source-toggle" data-action="source" aria-pressed="true">◧ 原文 / 审阅面板</button></div><main id="main" tabindex="-1"></main></div>
+<aside id="inspector" class="inspector" aria-label="原文与人工审阅"></aside>
+</div>
+<input id="file-input" type="file" accept=".yaml,.yml" multiple hidden>
+<input id="folder-input" type="file" accept=".yaml,.yml" webkitdirectory multiple hidden>
+<div id="drop-overlay" class="drop-overlay" hidden><div>＋<h2>释放以导入 YAML 模型</h2><p>支持多文件 · 仅在浏览器中处理</p></div></div>
+<div id="busy" class="busy-overlay" role="status" hidden><div><span class="spinner"></span><strong>正在建立审计索引</strong><p id="busy-text">正在解析…</p></div></div>
+<noscript>此工具需要 JavaScript。模型文件只在本地处理。</noscript>
+<!--APP-->
+</body>
+</html>
