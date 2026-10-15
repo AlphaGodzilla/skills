@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "buildId": "026b23d69b6f297caa29045f2f312432a0b6f77afbd63732a95b1e389e1e0caa",
+  "resources": {
+    "omf-auditor.html": {
+      "file": "builds/026b23d69b6f297caa29045f2f312432a0b6f77afbd63732a95b1e389e1e0caa/omf-auditor.html",
+      "sha256": "7aefd926c675f46ea516cc5ef5f454a662d8591c6206269b78ca9ad46be8310e",
+      "bytes": 237653
+    },
+    "workspace-worker.js": {
+      "file": "builds/026b23d69b6f297caa29045f2f312432a0b6f77afbd63732a95b1e389e1e0caa/workspace-worker.js",
+      "sha256": "860efca9473ddf3c60c072204c25a27e2763bc3aa0a6274839f6bdda36c87fd1",
+      "bytes": 142647
+    }
+  }
+}

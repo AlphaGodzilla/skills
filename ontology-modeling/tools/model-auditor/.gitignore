@@ -1,2 +1,4 @@
 node_modules/
 *.log
+builds/*
+!builds/026b23d69b6f297caa29045f2f312432a0b6f77afbd63732a95b1e389e1e0caa/

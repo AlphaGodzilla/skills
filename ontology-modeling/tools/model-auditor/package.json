@@ -5,9 +5,12 @@
   "type": "module",
   "engines": {"node": ">=22"},
   "scripts": {
-    "test": "node --test core.test.mjs && node dom.test.mjs",
+    "test": "node --test core.test.mjs navigation.test.mjs workspace-core.test.mjs snapshot.test.mjs workspace-runtime.test.mjs workspace-capacity.test.mjs review-ui.test.mjs session-ui.test.mjs reading-history.test.mjs shared-ui.test.mjs serve.test.mjs build.test.mjs distribution.test.mjs && node dom.test.mjs",
     "test:core": "node --test core.test.mjs",
     "test:dom": "node dom.test.mjs",
+    "test:ui": "node --test review-ui.test.mjs session-ui.test.mjs reading-history.test.mjs shared-ui.test.mjs && node dom.test.mjs",
+    "test:runtime": "node --test snapshot.test.mjs workspace-runtime.test.mjs workspace-capacity.test.mjs serve.test.mjs build.test.mjs",
+    "serve": "node serve.mjs",
     "test:browser": "node browser.test.mjs",
     "build:start": "node build.mjs start",
     "build:part": "node build.mjs part",

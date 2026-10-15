@@ -3,19 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; worker-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>OMF 模型审计器 · 离线 MVP</title>
 <!--CSS-->
 </head>
 <body>
 <a class="skip-link" href="#main">跳到审计内容</a>
 <header class="app-header"><div class="brand"><span class="brand-icon">◎</span><div>模型审计器 <span class="version">MVP</span><small>ONTOLOGY MODEL AUDITOR</small></div></div>
-<nav class="top-nav" aria-label="主导航"><button data-page="models" class="active">模型工作台</button><button data-page="issues">问题清单 <span id="issue-count">0</span></button><button data-page="matrix">权限矩阵</button><button data-page="files">导入文件</button></nav>
+<nav class="top-nav" aria-label="主导航"><a data-page="models" class="active">模型工作台</a><a data-page="issues">问题清单 <span id="issue-count">0</span></a><a data-page="matrix">权限矩阵</a><a data-page="files">导入文件</a></nav>
 <div class="header-actions"><span class="offline"><i></i> 离线运行</span><button data-action="export">↓ 导出审阅</button><button class="primary" data-action="import">＋ 导入 YAML</button></div></header>
+<div class="session-status" role="status"><span id="connection-status">连接中…</span><span id="export-status"></span><span id="barrier-status"></span><button id="cancel-barrier" data-action="cancel-barrier" hidden>取消全局操作</button><button id="save-export" data-action="save-export" hidden>确认已保存</button><button id="recovery-export" data-action="recovery-export" hidden>导出不完整恢复副本</button><button id="abandon-export" data-action="abandon-export" hidden>放弃待确认下载</button><button id="reconnect" data-action="reconnect" hidden>重新接入</button><a id="new-workspace" href="./">创建新工作区</a></div>
 <div id="banner" class="banner" role="status" hidden><span id="banner-text"></span><button data-action="close-banner" aria-label="关闭消息">×</button></div>
 <div id="workspace" class="workspace hide-inspector">
 <aside class="sidebar" aria-label="模型目录"><div class="sidebar-header"><h2>模型目录</h2><span id="list-count">0 个定义</span></div>
-<label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="搜索名称 / ID / 文件" aria-label="搜索模型"><kbd>/</kbd></label>
+<label class="search-box"><span>⌕</span><input id="search" type="search" maxlength="256" placeholder="搜索名称 / ID / 文件" aria-label="搜索模型"><kbd>/</kbd></label>
 <select id="kind-filter" aria-label="模型类型筛选"></select>
 <div class="sidebar-stats"><div><strong id="file-count">0</strong><span>模型文件</span></div><div><strong id="model-count">0</strong><span>模型定义</span></div><div><strong id="review-count">0</strong><span>已审阅</span></div></div>
 <div id="record-list" class="record-list"></div>

@@ -6,8 +6,16 @@ import {buildIndex,objectContext} from './indexer.js';
 import {runChecks} from './checks.js';
 import {importModels} from './importer.js';
 import {detailView} from './detail.js';
-import {inspectorView,exportReviews} from './inspector.js';
+import {inspectorView,sourceView,exportReviews} from './inspector.js';
 import {DEMO} from './demo.js';
+import {assignDefinitionKeys} from './navigation.js';
+import {queryView} from './snapshot.js';
+import {createRenderer} from './render.js';
+async function render(record,model,view='audit') {
+  for(const f of model.files)f.hash||='a'.repeat(64);
+  await assignDefinitionKeys(model);
+  return detailView(record,createRenderer(async q=>queryView(model,q),()=> '#test'),view);
+}
 const parse=data=>parseFile('test.yaml',stringify(data));
 const index=files=>runChecks(buildIndex(files));
 test('demo models form a resolved cross-model index',()=>{
@@ -58,13 +66,13 @@ test('unknown Ref fields are explicitly disclosed',()=>{
   const model=index([parse({behaviors:[{id:'B',customThingRef:'unknown'}]})]);
   assert.equal(model.records[0].unknown[0].key,'customThingRef');
 });
-test('untrusted YAML values remain escaped in all detail and inspector HTML',()=>{
+test('untrusted YAML values remain escaped in all detail and inspector HTML',async()=>{
   const payload='<img src=x onerror=alert(1)>';
   const model=index([parse({aggregates:[{id:'A',name:payload,lifecycle:[payload],attributes:[{name:'x',label:payload}]}]})]);
-  const r=model.records[0],html=detailView(r,model,'fields');
+  const r=model.records[0],html=await render(r,model,'fields');
   assert.ok(!html.includes('<img'));assert.ok(html.includes('&lt;img'));
   const state={index:model,selected:r.uid,reviews:new Map([[r.uid,{status:'pending',note:'</textarea><script>alert(1)</script>'}]])};
-  assert.ok(!inspectorView(state).includes('<script>'));
+  assert.ok(!inspectorView(r).includes('<script>'));
 });
 test('imports append, replace paths, fingerprint original bytes and remain atomic',async()=>{
   const first=await importModels([new File(['aggregates: [{id: A, lifecycle: [a]}]'],'m1.yaml')],[]);
@@ -91,10 +99,10 @@ test('review exports bind every review to a file fingerprint',async()=>{
   const data=exportReviews(state);assert.equal(data.reviews[0].fileSha256,model.files[0].hash);
   assert.equal(data.reviews[0].status,'changes');
 });
-test('2000-record index and page rendering stay bounded',()=>{
+test('2000-record index and page rendering stay bounded',async()=>{
   const model=index([parse({aggregates:[{id:'A',lifecycle:['draft']}],behaviors:Array.from({length:2000},(_,i)=>({id:'B'+i,ownerEntity:'A',preconditions:['x > 0']}))})]);
   assert.equal(model.records[0].incoming.length,2000);
-  const html=detailView(model.records[0],model);
+  const html=await render(model.records[0],model);
   assert.equal((html.match(/data-card=/g)||[]).length,40);
 });
 test('YAML alias children navigate to the anchor definition, not an unrelated parent',()=>{
@@ -114,7 +122,20 @@ test('directory import preserves relative paths for same-basename files',async()
 test('non-string display names fail parsing before workspace commit',()=>{
   assert.throws(()=>parse({rules:[{id:'R',name:{toString:'not-callable'}}]}),/必须是字符串/);
 });
-test('structured descriptions cannot cause implicit object coercion failures',()=>{
+test('structured descriptions cannot cause implicit object coercion failures',async()=>{
   const model=index([parse({rules:[{id:'R',description:{toString:'text'},expression:'x'}]})]);
-  assert.doesNotThrow(()=>detailView(model.records[0],model));
+  await assert.doesNotReject(()=>render(model.records[0],model));
+});
+
+test('all M4/M6 steps remain visible after many custom root fields, including non-container steps',async()=>{
+  const extras=Object.fromEntries(Array.from({length:65},(_,i)=>['custom'+i,'value']));
+  const model=index([parse({flows:[{id:'F',...extras,activities:[{activityId:'A',activityType:'START'},'malformed but inspectable']} ]})]);
+  const html=await render(model.records[0],model);assert.equal((html.match(/class="step"/g)||[]).length,2);assert.match(html,/malformed but inspectable/);
+});
+
+test('bounded DTO rendering adapts oversized source pages without skipping long Chinese lines',async()=>{
+  const file=Object.assign(parseFile('long-lines.yaml','rules:\n  - id: R\n    expression: |\n'+Array.from({length:20},()=> '      '+ '中'.repeat(5000)).join('\n')),{hash:'d'.repeat(64)});
+  const model=await assignDefinitionKeys(index([file])),r=queryView(model,{type:'definition',key:model.records[0].key});
+  const ui=createRenderer(async q=>queryView(model,q),()=> '#test');
+  const dto=await sourceView(r,ui.query,[],1);assert.equal((dto.html.match(/class="source-line /g)||[]).length,file.lines.length);
 });
