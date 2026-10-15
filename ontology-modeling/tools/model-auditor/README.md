@@ -67,3 +67,8 @@ PLAYWRIGHT_BROWSERS_PATH=/tmp/omf-auditor-browsers npm run test:browser
 工具维护属于独立任务；使用本工具审阅业务模型不改变 skill 的业务建模阶段边界。
 
 内嵌第三方运行依赖为 yaml 2.8.1（ISC）；许可保留在 HTML 内。esbuild、jsdom 和 Playwright 仅用于构建 / 测试，不是使用 HTML 的依赖。
+
+## 设计资料
+
+- [浏览器多标签页审计设计](docs/design/browser-tabs.md)：设计提案，尚未实现；不是当前版本的使用步骤。
+- [架构决策索引](docs/adr/README.md)：运行形态、共享状态所有权及其取舍。
